@@ -73,8 +73,8 @@ export default function Navbar({
                   key={link.id}
                   id={`nav-link-${link.id}`}
                   onClick={() => handleLinkClick(link.id)}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors hover:text-[#0F3460] ${
-                    activeTab === link.id ? 'text-[#0F3460] font-semibold' : 'text-[#FAFAFC]'
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors hover:text-white hover:bg-white/10 ${
+                    activeTab === link.id ? 'text-white font-bold bg-white/15' : 'text-white/80'
                   }`}
                 >
                   {link.name}
@@ -86,7 +86,7 @@ export default function Navbar({
                   onBecomeMerchant();
                   setIsOpen(false);
                 }}
-                className="px-3 py-2 rounded-md text-sm font-medium text-[#FAFAFC] transition-colors hover:text-[#0F3460]"
+                className="px-3 py-2 rounded-md text-sm font-medium text-white/80 transition-colors hover:text-white hover:bg-white/10"
               >
                 Become a Merchant
               </button>
@@ -188,8 +188,8 @@ export default function Navbar({
                 onClick={() => handleLinkClick(link.id)}
                 className={`block w-full text-left px-3 py-2.5 rounded-lg text-base font-medium transition-all ${
                   activeTab === link.id
-                    ? 'bg-white/10 text-[#0F3460] pl-5'
-                    : 'text-[#FAFAFC] hover:bg-white/5 hover:text-white'
+                    ? 'bg-white/15 text-white pl-5 font-bold'
+                    : 'text-white/80 hover:bg-white/5 hover:text-white'
                 }`}
               >
                 {link.name}
@@ -201,7 +201,7 @@ export default function Navbar({
                 onBecomeMerchant();
                 setIsOpen(false);
               }}
-              className="block w-full text-left px-3 py-2.5 rounded-lg text-base font-medium text-[#FAFAFC] hover:bg-white/5 hover:text-white transition"
+              className="block w-full text-left px-3 py-2.5 rounded-lg text-base font-medium text-white/80 hover:bg-white/5 hover:text-white transition"
             >
               Become a Merchant
             </button>

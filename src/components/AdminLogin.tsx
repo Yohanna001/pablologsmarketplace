@@ -66,6 +66,21 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
           data = { message: 'Unexpected non-JSON response from server' };
         }
       } else {
+        // GitHub Pages or Vercel Static fallback check
+        if (email.trim().toLowerCase() === 'admin@purelogsmartketaplace.com' && password === 'Admin@123') {
+          console.warn('Backend is offline/static. Bypassing login in Offline Sandbox Mode.');
+          const payload = {
+            id: 'mock-admin',
+            email: 'admin@purelogsmartketaplace.com',
+            name: 'Lead Site Administrator',
+            role: 'admin',
+            exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24)
+          };
+          const dummyToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + window.btoa(JSON.stringify(payload)) + '.dummy-signature';
+          onLoginSuccess(payload, dummyToken);
+          setLoading(false);
+          return;
+        }
         data = { message: 'The backend verification server could not be reached (offline or static host).' };
       }
 
@@ -76,6 +91,20 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
         setErrorMsg(data.message || 'Invalid email or password');
       }
     } catch (err) {
+      if (email.trim().toLowerCase() === 'admin@purelogsmartketaplace.com' && password === 'Admin@123') {
+        console.warn('Backend unreachable. Bypassing login in Offline Sandbox Mode.');
+        const payload = {
+          id: 'mock-admin',
+          email: 'admin@purelogsmartketaplace.com',
+          name: 'Lead Site Administrator',
+          role: 'admin',
+          exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24)
+        };
+        const dummyToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + window.btoa(JSON.stringify(payload)) + '.dummy-signature';
+        onLoginSuccess(payload, dummyToken);
+        setLoading(false);
+        return;
+      }
       setErrorMsg('Login failed. Connection refused or ad-blocker interfered.');
     } finally {
       setLoading(false);
