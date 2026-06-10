@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-heading: "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Redefined color mappings inside the custom theme variables */
+  --color-mature-navy: #0A0A14;        /* Rich Obsidian Midnight - sleek and high-end dark */
+  --color-mature-blue: #6366F1;        /* Radiant Indigo - warm and ultra-modern brand focus */
+  --color-mature-dark-blue: #4F46E5;   /* Royal Purple Hover state */
+  --color-mature-coral: #F43F5E;       /* Exquisite Pinkish-Red Rose Accent */
+  --color-mature-hero-bg: #F8FAFC;     /* Light Pearl backdrop */
+  --color-mature-body-bg: #FCFCFD;     /* Pristine Minimalist White canvas */
+  --color-mature-border: #E2E8F0;      /* Ultra soft borders */
+  --color-mature-gray-text: #64748B;   /* Beautiful slate grey */
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #EDF2F7;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(244, 63, 94, 0.07) 0px, transparent 55%),
+    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.10) 0px, transparent 55%),
+    radial-gradient(at 50% 100%, rgba(79, 70, 229, 0.06) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(244, 63, 94, 0.03) 0px, transparent 55%);
+  background-attachment: fixed;
+  color: #0F172A;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 
+  ELEGANT SYSTEM OVERRIDES:
+  We dynamically intercept compiling classnames matching the old hardcoded 
+  hex codes to paint the entire interface with this high-end custom aesthetic.
+*/
+
+/* 1. Deep Midnight Obsidian (#1A1A2E) Overrides */
+.bg-\[\#1A1A2E\], 
+[class*="bg-[#1A1A2E]"] {
+  background-color: #0A0A14 !important;
+}
+.text-\[\#1A1A2E\], 
+[class*="text-[#1A1A2E]"] {
+  color: #0F172A !important;
+}
+.border-\[\#1A1A2E\], 
+[class*="border-[#1A1A2E]"] {
+  border-color: #1E293B !important;
+}
+.hover\:text-\[\#1A1A2E\]:hover, 
+[class*="hover:text-[#1A1A2E]"]:hover {
+  color: #6366F1 !important;
+}
+
+/* 2. Brand Indigo / Purple Blue (#0F3460) Overrides */
+.bg-\[\#0F3460\], 
+[class*="bg-[#0F3460]"] {
+  background-color: #6366F1 !important;
+}
+.text-\[\#0F3460\], 
+[class*="text-[#0F3460]"] {
+  color: #6366F1 !important;
+}
+.border-\[\#0F3460\], 
+[class*="border-[#0F3460]"] {
+  border-color: #6366F1 !important;
+}
+.hover\:text-\[\#0F3460\]:hover, 
+[class*="hover:text-[#0F3460]"]:hover {
+  color: #4F46E5 !important;
+}
+.hover\:bg-\[\#0F3460\]:hover, 
+[class*="hover:bg-[#0F3460]"]:hover {
+  background-color: #4F46E5 !important;
+}
+.focus\:border-\[\#0F3460\]:focus, 
+[class*="focus:border-[#0F3460]"]:focus {
+  border-color: #6366F1 !important;
+}
+
+/* 3. Deep Indigo Royal Blue Hover (#16213E) Overrides */
+.bg-\[\#16213E\],
+.hover\:bg-\[\#16213E\]:hover,
+[class*="bg-[#16213E]"], 
+[class*="hover:bg-[#16213E]"]:hover {
+  background-color: #4F46E5 !important;
+}
+.text-\[\#16213E\], 
+[class*="text-[#16213E]"] {
+  color: #4F46E5 !important;
+}
+
+/* 4. Vivid Sunset Coral / Exquisite Cherry Rose (#E94560) Overrides */
+.bg-\[\#E94560\], 
+.hover\:bg-\[\#E94560\]:hover, 
+[class*="bg-[#E94560]"], 
+[class*="hover:bg-[#E94560]"]:hover {
+  background-color: #F43F5E !important;
+}
+.hover\:bg-\[\#cf354f\]:hover,
+[class*="hover:bg-[#cf354f]"]:hover {
+  background-color: #F43F5E !important;
+}
+.text-\[\#E94560\], 
+[class*="text-[#E94560]"] {
+  color: #F43F5E !important;
+}
+.border-\[\#E94560\], 
+[class*="border-[#E94560]"] {
+  border-color: #F43F5E !important;
+}
+
+/* 5. Custom Background & Page Canvas (#FAFAFC & #F5F5F7) Overrides */
+.bg-\[\#FAFAFC\], 
+[class*="bg-[#FAFAFC]"] {
+  background-color: #FCFCFD !important;
+}
+.bg-\[\#F5F5F7\], 
+[class*="bg-[#F5F5F7]"] {
+  background-color: #F8FAFC !important;
+}
+
+/* 6. Soft Borders (#E0E0E0) Overrides */
+.border-\[\#E0E0E0\], 
+[class*="border-[#E0E0E0]"] {
+  border-color: #E2E8F0 !important;
+}
+.border-b-\[\#E0E0E0\], 
+[class*="border-b-[#E0E0E0]"] {
+  border-bottom-color: #E2E8F0 !important;
+}
+
+/* 7. Beautiful Slate Secondary Text (#4A4A6A) Overrides */
+.text-\[\#4A4A6A\], 
+[class*="text-[#4A4A6A]"] {
+  color: #64748B !important;
+}
+
+/* Custom visual micro-details to make the layout feel pristine */
+::selection {
+  background-color: #C7D2FE;
+  color: #1E1B4B;
+}
+
+/* Scrollbar customizations */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #FCFCFD;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 99px;
+  border: 2px solid #FCFCFD;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
