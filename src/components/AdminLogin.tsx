@@ -56,7 +56,18 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
         body: JSON.stringify({ email, password })
       });
 
-      const data = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          const text = await response.text();
+          data = JSON.parse(text);
+        } catch (jsonErr) {
+          data = { message: 'Unexpected non-JSON response from server' };
+        }
+      } else {
+        data = { message: 'The backend verification server could not be reached (offline or static host).' };
+      }
 
       if (response.ok) {
         // Feed authentication data upwards
@@ -91,7 +102,18 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
         body: JSON.stringify({ email: forgotEmail })
       });
 
-      const data = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          const text = await response.text();
+          data = JSON.parse(text);
+        } catch {
+          data = { message: 'Invalid response from server' };
+        }
+      } else {
+        data = { message: 'The backend verification server is offline.' };
+      }
 
       if (response.ok) {
         setResetSuccessMessage(`Password reset simulation triggered! A reset token was generated. This link is active for 1 hour.`);
@@ -140,7 +162,18 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
         body: JSON.stringify({ token: resetTokenFromUrl, newPassword })
       });
 
-      const data = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        try {
+          const text = await response.text();
+          data = JSON.parse(text);
+        } catch {
+          data = { message: 'Invalid response formats' };
+        }
+      } else {
+        data = { message: 'The backend verification server is offline.' };
+      }
 
       if (response.ok) {
         alert('Password has been successfully changed! Returning to admin login screen.');

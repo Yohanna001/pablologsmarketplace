@@ -90,18 +90,6 @@ export default function Navbar({
               >
                 Become a Merchant
               </button>
-              <button
-                id="nav-link-deployment"
-                onClick={() => {
-                  onGoToDeployment?.();
-                  setIsOpen(false);
-                }}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors hover:text-[#0F3460] ${
-                  activeTab === 'deployment' ? 'text-[#0F3460] font-bold' : 'text-[#FAFAFC]'
-                }`}
-              >
-                📸 Deployment Gallery
-              </button>
             </div>
 
             <div className="flex items-center space-x-4 border-l border-[#E0E0E0]/20 pl-6">
@@ -216,16 +204,6 @@ export default function Navbar({
               className="block w-full text-left px-3 py-2.5 rounded-lg text-base font-medium text-[#FAFAFC] hover:bg-white/5 hover:text-white transition"
             >
               Become a Merchant
-            </button>
-            <button
-              id="mobile-nav-link-deployment"
-              onClick={() => {
-                onGoToDeployment?.();
-                setIsOpen(false);
-              }}
-              className="block w-full text-left px-3 py-2.5 rounded-lg text-base font-medium text-[#FAFAFC] hover:bg-white/5 hover:text-white transition"
-            >
-              📸 Deployment Gallery
             </button>
           </div>
 

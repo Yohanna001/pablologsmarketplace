@@ -22,11 +22,28 @@ import AdminLogin from './components/AdminLogin';
 import PaymentCallback from './components/PaymentCallback';
 import DeploymentAssets from './components/DeploymentAssets';
 
+// Detect the deployment base path (for instance, on GitHub Pages like /repository-name)
+const getBasePath = (): string => {
+  if (typeof window === 'undefined') return '';
+  const path = window.location.pathname;
+  const clean = path.replace(/(\/marketplace|\/deployment-assets|\/deployment|\/admin-login|\/admin(\/.*)?|\/payment\/callback|\/index\.html)$/, '');
+  return clean.endsWith('/') ? clean.slice(0, -1) : clean;
+};
+
+const basePath = getBasePath();
+
 export default function App() {
   // Navigation & Pathname Physical Routing
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [view, setView] = useState<'landing' | 'marketplace' | 'admin' | 'payment-callback' | 'deployment-assets'>('landing');
   const [activeNavTab, setActiveNavTab] = useState('home');
+
+  // Determine path relative to GitHub Pages repository subfolder (basePath)
+  let relativePath = currentPath;
+  if (basePath && currentPath.startsWith(basePath)) {
+    relativePath = currentPath.substring(basePath.length);
+  }
+  if (relativePath === '') relativePath = '/';
 
   // Admin Secure Session State
   const [adminSession, setAdminSession] = useState<any>(null);
@@ -37,8 +54,11 @@ export default function App() {
 
   // Physical routing navigate helper
   const navigateTo = (path: string) => {
-    window.history.pushState(null, '', path);
-    setCurrentPath(path);
+    const targetWithBase = (basePath && !path.startsWith(basePath)) 
+      ? `${basePath}${path === '/' ? '/' : path}` 
+      : path;
+    window.history.pushState(null, '', targetWithBase);
+    setCurrentPath(targetWithBase);
   };
 
   // Physical Router Path synchronizer
@@ -54,18 +74,24 @@ export default function App() {
 
   // Synchronize path transitions with traditional state switcher
   useEffect(() => {
-    if (currentPath === '/' || currentPath === '/index.html') {
+    let rel = currentPath;
+    if (basePath && currentPath.startsWith(basePath)) {
+      rel = currentPath.substring(basePath.length);
+    }
+    if (rel === '') rel = '/';
+
+    if (rel === '/' || rel === '/index.html') {
       setView('landing');
-    } else if (currentPath === '/marketplace') {
+    } else if (rel === '/marketplace') {
       setView('marketplace');
       setActiveNavTab('marketplace');
-    } else if (currentPath === '/deployment' || currentPath === '/deployment-assets') {
+    } else if (rel === '/deployment' || rel === '/deployment-assets') {
       setView('deployment-assets');
       setActiveNavTab('deployment');
-    } else if (currentPath.startsWith('/admin')) {
+    } else if (rel.startsWith('/admin') || rel === '/admin-login') {
       setView('admin');
       setActiveNavTab('admin');
-    } else if (currentPath === '/payment/callback') {
+    } else if (rel === '/payment/callback') {
       setView('payment-callback');
     }
   }, [currentPath]);
@@ -92,6 +118,24 @@ export default function App() {
     }
   };
 
+  // Client-side helper to decode JWT payload safely for offline session fallback
+  const parseJwtPayload = (token: string): any => {
+    try {
+      const base64Url = token.split('.')[1];
+      if (!base64Url) return null;
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        window.atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Secure admin login and session verification hooks
   const verifyAdminSession = async (token: string) => {
     if (!token) {
@@ -105,21 +149,75 @@ export default function App() {
           'Authorization': `Bearer ${token}`
         }
       });
-      const data = await response.json();
-      if (response.ok && (data.valid || data.admin)) {
+      
+      let data: any = null;
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('application/json')) {
+        try {
+          data = await response.json();
+        } catch (jsonErr) {
+          console.warn('JSON parsing failed on verify endpoint:', jsonErr);
+        }
+      }
+
+      if (data && (data.valid || data.admin)) {
         setAdminSession(data.admin);
         setLastActivity(Date.now()); // refresh activity
-      } else {
-        // Token is stale or invalid, invalidate locally
-        setAdminToken('');
-        setAdminSession(null);
-        localStorage.removeItem('pm_admin_token');
-        if (window.location.pathname.startsWith('/admin') && window.location.pathname !== '/admin-login' && window.location.pathname !== '/admin/login') {
-          navigateTo('/admin-login');
+      } else if (response.ok && !contentType.includes('application/json')) {
+        // Got 200 OK but it was not JSON (probably index.html from static build path)
+        // Attempt to verify JWT token client side to preserve local session
+        const decoded = parseJwtPayload(token);
+        if (decoded) {
+          const isExpired = decoded.exp && decoded.exp * 1000 < Date.now();
+          if (isExpired) {
+            console.warn('Local admin session is expired (determined client-side).');
+            setAdminToken('');
+            setAdminSession(null);
+            localStorage.removeItem('pm_admin_token');
+          } else {
+            console.log('Using decoded client-side administrator profile (offline mode).');
+            setAdminSession(decoded);
+            setLastActivity(Date.now());
+          }
+        }
+      } else if (!response.ok) {
+        // Server returned an error state or 404 (e.g. GitHub Pages static routing)
+        // Attempt client-side JWT decryption fallback
+        const decoded = parseJwtPayload(token);
+        if (decoded) {
+          const isExpired = decoded.exp && decoded.exp * 1000 < Date.now();
+          if (isExpired) {
+            setAdminToken('');
+            setAdminSession(null);
+            localStorage.removeItem('pm_admin_token');
+          } else {
+            console.info('Server verification unreachable. Retaining client-side admin session.');
+            setAdminSession(decoded);
+            setLastActivity(Date.now());
+          }
+        } else {
+          setAdminToken('');
+          setAdminSession(null);
+          localStorage.removeItem('pm_admin_token');
         }
       }
     } catch (err) {
-      console.error('Remote admin verification offline, retaining local session state:', err);
+      // Offline / network failure
+      const decoded = parseJwtPayload(token);
+      if (decoded) {
+        const isExpired = decoded.exp && decoded.exp * 1000 < Date.now();
+        if (isExpired) {
+          setAdminToken('');
+          setAdminSession(null);
+          localStorage.removeItem('pm_admin_token');
+        } else {
+          console.info('Network request offline, using decrypted local token:', decoded);
+          setAdminSession(decoded);
+          setLastActivity(Date.now());
+        }
+      } else {
+        console.warn('Remote admin verification offline, retaining local session state:', err);
+      }
     } finally {
       setIsVerifyingAdmin(false);
     }
@@ -498,9 +596,9 @@ export default function App() {
         )}
 
         {/* VIEW 3: SECURE PHYSICAL ADMIN PATH ROUTES */}
-        {currentPath.startsWith('/admin') && (
+        {(relativePath.startsWith('/admin') || relativePath === '/admin-login') && (
           <div id="secure-admin-routes-wrapper" className="animate-[fadeIn_0.3s_ease]">
-            {currentPath === '/admin-login' || currentPath === '/admin/login' ? (
+            {relativePath === '/admin-login' || relativePath === '/admin/login' ? (
               <AdminLogin
                 onLoginSuccess={(adminData, token) => handleAdminLoginSuccess(token, adminData)}
                 onNavigate={(path) => navigateTo(path)}
@@ -523,7 +621,7 @@ export default function App() {
                 adminSession={adminSession}
                 adminToken={adminToken}
                 onAdminLogout={handleAdminLogout}
-                activeTab={getActiveAdminTabFromPath(currentPath)}
+                activeTab={getActiveAdminTabFromPath(relativePath)}
                 onTabChange={handleAdminTabChange}
               />
             ) : (

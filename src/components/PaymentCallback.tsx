@@ -59,7 +59,15 @@ export default function PaymentCallback() {
           }),
         });
 
-        const data = await response.json();
+        let data: any = {};
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          try {
+            data = await response.json();
+          } catch (jsonErr) {
+            console.warn('JSON parsing of webhook returned invalid raw data', jsonErr);
+          }
+        }
 
         if (response.ok && data.status === 'success') {
           setVerificationState('success');
