@@ -50,7 +50,7 @@ export default function PaymentCallback() {
           const listings = db.getProducts();
           const targetProduct = listings.find(p => p.id === existingOrder.productId);
 
-          let releasedCoordinates = 'Email: default_escrow_access@pablologs.com | Password: TempVerifyPassword9933';
+          let releasedCoordinates = '0';
 
           if (targetProduct && targetProduct.credentials && targetProduct.credentials.length > 0) {
             // Find next available unsold credentials

@@ -87,6 +87,8 @@ CREATE TABLE IF NOT EXISTS public.orders (
   id TEXT PRIMARY KEY,
   buyer_email TEXT,
   buyer_name TEXT,
+  customer_name TEXT, -- Included for multi-schema and third-party custom template compatibility
+  customer_email TEXT, -- Included for multi-schema and third-party custom template compatibility
   product_id TEXT,
   product_title TEXT,
   product_platform TEXT,
@@ -175,8 +177,8 @@ function mapProductToDb(prod: ProductListing) {
 function mapOrderFromDb(row: any): Order {
   return {
     id: row.id,
-    buyerEmail: row.buyer_email,
-    buyerName: row.buyer_name,
+    buyerEmail: row.buyer_email || row.customer_email || 'buyer@pablologs.com',
+    buyerName: row.buyer_name || row.customer_name || 'Verified Buyer',
     productId: row.product_id,
     productTitle: row.product_title,
     productPlatform: row.product_platform,
@@ -189,10 +191,14 @@ function mapOrderFromDb(row: any): Order {
 }
 
 function mapOrderToDb(order: Order) {
+  const finalEmail = order.buyerEmail || 'buyer@pablologs.com';
+  const finalName = order.buyerName || 'Verified Buyer';
   return {
     id: order.id,
-    buyer_email: order.buyerEmail,
-    buyer_name: order.buyerName,
+    buyer_email: finalEmail,
+    buyer_name: finalName,
+    customer_name: finalName, // Satisfy any non-null constraint on either column name
+    customer_email: finalEmail, // Satisfy any non-null constraint on either column name
     product_id: order.productId,
     product_title: order.productTitle,
     product_platform: order.productPlatform,

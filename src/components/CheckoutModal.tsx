@@ -58,7 +58,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       const listings = db.getProducts();
       const targetProduct = listings.find(p => p.id === product.id);
       
-      let releasedCoordinates = 'Email: default_escrow_access@pablologs.org | Password: TempPasswordRef99';
+      let releasedCoordinates = '0';
 
       if (targetProduct && targetProduct.credentials && targetProduct.credentials.length > 0) {
         // Find next available unsold credentials
@@ -298,126 +298,59 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
               </div>
             </div>
 
-            {/* Flutterwave Primary checkout trigger */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <h5 className="text-[10px] font-bold text-[#4A4A6A] uppercase tracking-widest block">Primary Gateway</h5>
-              <p className="text-[11px] text-[#4A4A6A] leading-relaxed">
-                Unlock credentials instantly using the integrated Flutterwave secure widget. Accept cards, bank transfers, and USSD.
-              </p>
-              
-              <div className="space-y-2.5">
-                <div>
-                  <label className="block text-xs font-bold text-[#1A1A2E] mb-1">
-                    Recipient Delivery Email
-                  </label>
+            {/* Clean Recipient Details & Direct Flutterwave Payment Action */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#1A1A2E] mb-2 uppercase tracking-wider">
+                  Recipient Delivery Email
+                </label>
+                <div id="buyer-email-input-wrapper" className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
+                    <Mail className="w-4.5 h-4.5" />
+                  </span>
                   <input
                     type="email"
                     required
                     value={buyerEmail}
                     onChange={(e) => setBuyerEmail(e.target.value)}
-                    placeholder="Enter email to deliver coordinate receipt"
-                    className="w-full text-xs px-3.5 py-2.5 bg-white border border-[#E0E0E0] text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F3460] min-h-[44px]"
+                    placeholder="Enter email to deliver account receipt"
+                    className="w-full text-sm pl-10 pr-4 py-3 bg-slate-50 border border-[#E0E0E0] text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F3460] min-h-[46px] transition-all"
                   />
                 </div>
+                <p className="text-[10px] text-slate-500 mt-1.5 leading-normal">
+                  The digital accounts and coordinate details will instantly appear on your screen and be dispatched to your email address as soon as payment is confirmed.
+                </p>
+              </div>
 
+              <div className="pt-2">
                 <button
                   type="button"
-                  id="fw-widget-trigger-btn"
+                  id="fw-checkout-trigger-btn"
                   onClick={handlePayViaFlutterwave}
                   disabled={isInitializing}
-                  className={`w-full py-2.5 text-white font-extrabold text-xs rounded-lg transition-transform duration-200 hover:scale-[1.01] flex items-center justify-center gap-1.5 shadow min-h-[44px] cursor-pointer ${
-                    isInitializing ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#0F3460] hover:bg-[#16213E]'
+                  className={`w-full py-3.5 text-white font-extrabold text-sm rounded-xl transition-all duration-200 active:scale-[0.99] flex items-center justify-center gap-2.5 shadow-md cursor-pointer ${
+                    isInitializing ? 'bg-slate-450 cursor-not-allowed' : 'bg-[#E94560] hover:bg-[#D83A52]'
                   }`}
                 >
                   {isInitializing ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Connecting Secure Checkout Gateway...
+                      Redirecting to Flutterwave...
                     </>
                   ) : (
                     <>
-                      <Shield className="w-4 h-4 text-emerald-400" />
-                      Pay ₦{product.price.toLocaleString()} via Flutterwave Redirect
+                      <Shield className="w-4 h-4 text-white" />
+                      Pay ₦{product.price.toLocaleString()} via Flutterwave Checkout
                     </>
                   )}
                 </button>
               </div>
+
+              <div className="pt-2 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Secured 256-bit SSL Escrow Gateway Handshake</span>
+              </div>
             </div>
-
-            {/* Fallback Direct Credit Card Form */}
-            <form onSubmit={handleSimulatedPaySubmit} className="space-y-3 pt-2 border-t border-slate-200">
-              <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-extrabold text-[#4A4A6A] uppercase tracking-widest">Or Pay directly below (Sandbox Simulation)</h4>
-                <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 rounded-full font-bold">100% Offline fallback</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3.5 pt-1">
-                <div className="col-span-2">
-                  <label className="block text-[11px] font-bold text-[#1A1A2E] mb-1">
-                    Cardholder Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={cardName}
-                    onChange={(e) => setCardName(e.target.value)}
-                    placeholder="Name as printed on cards"
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-[#E0E0E0] text-slate-800 rounded-lg focus:outline-none min-h-[40px]"
-                  />
-                </div>
-
-                <div className="col-span-2">
-                  <label className="block text-[11px] font-bold text-[#1A1A2E] mb-1">
-                    Card Numbers
-                  </label>
-                  <input
-                    type="text"
-                    value={cardNumber}
-                    onChange={handleCardNumberChange}
-                    placeholder="4242 4242 4242 4242 (Any Test Card)"
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-[#E0E0E0] text-slate-800 rounded-lg focus:outline-none min-h-[40px]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-[#1A1A2E] mb-1">
-                    Expiration (MM/YY)
-                  </label>
-                  <input
-                    type="text"
-                    value={cardExpiry}
-                    onChange={handleExpiryChange}
-                    placeholder="12/28"
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-[#E0E0E0] text-slate-800 rounded-lg focus:outline-none text-center min-h-[40px]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-[#1A1A2E] mb-1">
-                    Secure CVC Code
-                  </label>
-                  <input
-                    type="password"
-                    value={cardCvc}
-                    onChange={handleCvcChange}
-                    placeholder="123"
-                    className="w-full text-xs px-3 py-2 bg-slate-50 border border-[#E0E0E0] text-slate-800 rounded-lg focus:outline-none text-center min-h-[40px]"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3 flex items-center justify-between gap-4">
-                <span className="text-[10px] text-[#4A4A6A] flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#0F3460]" />
-                  Direct local clearance
-                </span>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-[#1A1A2E] hover:bg-[#16213E] text-white font-bold text-xs rounded-full transition cursor-pointer min-h-[40px]"
-                >
-                  Clear Escrow Payment ₦{product.price.toLocaleString()}
-                </button>
-              </div>
-            </form>
 
           </div>
         )}
