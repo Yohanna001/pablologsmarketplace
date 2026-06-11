@@ -93,137 +93,19 @@ export const INITIAL_USERS: User[] = [
     createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString()
   },
   {
-    id: 'usr-merchant-1',
-    name: 'Premium Sounds Ltd.',
-    email: 'merchant@seller.com',
-    role: 'merchant',
-    isApprovedMerchant: true,
-    createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString()
-  },
-  {
-    id: 'usr-merchant-2',
-    name: 'FastStream Resellers',
-    email: 'pending_merchant@seller.com',
-    role: 'merchant',
-    isApprovedMerchant: false, // Pending approval for admin demo action!
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-  },
-  {
-    id: 'usr-buyer-1',
-    name: 'Sarah Customer',
-    email: 'buyer@customer.com',
+    id: 'usr-buyer-live',
+    name: 'Live Buyer',
+    email: 'YohannaIsaac90@gmail.com',
     role: 'buyer',
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+    createdAt: new Date().toISOString()
   }
 ];
 
 // Seed merchants database matching wireframe examples
-export const INITIAL_MERCHANTS: Merchant[] = [
-  {
-    id: 'merch-john',
-    userId: 'usr-merchant-1',
-    fullName: 'John Doe',
-    email: 'john@example.com',
-    phone: '+234 801 234 5678',
-    storeName: "John's Premium Store",
-    storeDescription: 'Selling verified premium accounts since 2024',
-    typesOfAssets: ['Streaming Accounts', 'Gaming Accounts'],
-    status: 'approved',
-    totalAssets: 12,
-    totalSales: 156,
-    totalRevenue: 450000,
-    appliedAt: '2025-01-01T10:00:00.000Z',
-    approvedAt: '2025-01-01T14:30:00.000Z'
-  },
-  {
-    id: 'merch-sarah',
-    userId: 'usr-sarah-merchant',
-    fullName: 'Sarah Digital',
-    email: 'sarah@example.com',
-    phone: '+234 802 987 6543',
-    storeName: 'Sarah Accounts Hub',
-    storeDescription: 'Instant delivery on premium soft keys',
-    typesOfAssets: ['Software Licenses', 'Streaming Accounts'],
-    status: 'pending',
-    totalAssets: 8,
-    totalSales: 78,
-    totalRevenue: 230000,
-    appliedAt: '2025-01-02T11:00:00.000Z'
-  },
-  {
-    id: 'merch-mike',
-    userId: 'usr-mike-merchant',
-    fullName: 'Mike Accounts',
-    email: 'mike@example.com',
-    phone: '+234 812 345 6789',
-    storeName: 'Mike Premium Shop',
-    storeDescription: 'Gaming codes and bulk checked accounts provider',
-    typesOfAssets: ['Gaming Accounts'],
-    status: 'rejected',
-    totalAssets: 3,
-    totalSales: 18,
-    totalRevenue: 890000,
-    appliedAt: '2025-01-03T12:00:00.000Z',
-    rejectionReason: 'Invalid phone number pattern provided'
-  },
-  {
-    id: 'merch-anna',
-    userId: 'usr-anna-merchant',
-    fullName: 'Anna Store',
-    email: 'anna@example.com',
-    phone: '+234 901 234 5678',
-    storeName: 'Anna Store & Design Hub',
-    storeDescription: 'Aviation and design preset licenses',
-    typesOfAssets: ['Streaming Accounts', 'Other'],
-    status: 'pending',
-    totalAssets: 0,
-    totalSales: 0,
-    totalRevenue: 0,
-    appliedAt: '2025-01-04T09:15:00.000Z'
-  }
-];
+export const INITIAL_MERCHANTS: Merchant[] = [];
 
 // Seed orders database in Naira (₦)
-export const INITIAL_ORDERS: Order[] = [
-  {
-    id: 'order-1',
-    buyerEmail: 'buyer@customer.com',
-    buyerName: 'Sarah Customer',
-    productId: 'prod-1',
-    productTitle: 'Netflix Premium Ultra 4K UHD (Private Screen)',
-    productPlatform: 'Streaming',
-    amount: 15000,
-    status: 'delivered',
-    paymentGateway: 'paystack',
-    credentialsShared: 'Email: netflix4k_sarah_paid@pablologs.com | Password: NfSecure9491',
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-  },
-  {
-    id: 'order-2',
-    buyerEmail: 'client@gmail.com',
-    buyerName: 'John Dev',
-    productId: 'prod-3',
-    productTitle: 'Disney+ Premium High-Def (Shared Screen)',
-    productPlatform: 'Streaming',
-    amount: 13500,
-    status: 'paid',
-    paymentGateway: 'paystack',
-    credentialsShared: 'Email: disney_john_api@pablologs.com | Password: DisneyAccess82',
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
-  },
-  {
-    id: 'order-3',
-    buyerEmail: 'buyer@customer.com',
-    buyerName: 'Sarah Customer',
-    productId: 'prod-5',
-    productTitle: 'Gmail Verified Legacy Account (Bulk Checked)',
-    productPlatform: 'Productivity',
-    amount: 7500,
-    status: 'pending',
-    paymentGateway: 'paystack',
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-  }
-];
+export const INITIAL_ORDERS: Order[] = [];
 
 // Seed testimonials for landing page
 export const LANDING_TESTIMONIALS: Testimonial[] = [

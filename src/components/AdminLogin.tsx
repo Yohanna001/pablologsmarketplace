@@ -509,20 +509,6 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
         )}
 
       </div>
-      
-      {/* Sandbox Seeding Helper Strip */}
-      <div className="mt-6 p-4 rounded-xl max-w-sm bg-white/5 border border-white/15 text-[11px] text-slate-400 space-y-1.5 select-none" id="sandbox-cheat-sheet">
-        <div className="flex items-center gap-1.5 font-bold text-slate-200">
-          <Cpu className="w-4 h-4 text-[#0F3460]" />
-          <span>Quick Seeding Cheat Sheet</span>
-        </div>
-        <p>Default login for fast review:</p>
-        <div className="font-mono bg-black/30 p-2 rounded border border-white/5 text-slate-300 space-y-1 select-all text-[10px]">
-          <div><b className="text-[#E94560]">Email (seeded):</b> admin@pablologsmarketplace.com</div>
-          <div><b className="text-[#E94560]">Email (alt):</b> admin@purelogsmartketaplace.com</div>
-          <div><b className="text-[#E94560]">Password:</b> Admin@123</div>
-        </div>
-      </div>
 
     </div>
   );

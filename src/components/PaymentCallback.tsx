@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Loader2, ArrowLeft, ShieldCheck, ShoppingBag, Globe } from 'lucide-react';
+import { db } from '../data';
+import { decryptCredentials } from '../utils/crypto';
 
 /**
  * PRODUCTION-READY SPA FRONTEND VIEW COMPONENT
@@ -12,6 +14,7 @@ export default function PaymentCallback() {
   const [txRef, setTxRef] = useState<string>('');
   const [transactionId, setTransactionId] = useState<string>('');
   const [errorDetails, setErrorDetails] = useState<string>('');
+  const [releasedCredentials, setReleasedCredentials] = useState<string>('');
 
   useEffect(() => {
     // Read query parameters from window location
@@ -30,11 +33,76 @@ export default function PaymentCallback() {
       return;
     }
 
+    // Secure local order fulfillment helper
+    function fulfillClientOrder(orderRef: string) {
+      if (!orderRef) return '';
+      try {
+        const orders = db.getOrders();
+        const existingOrder = orders.find(o => o.id === orderRef);
+
+        if (existingOrder) {
+          if (existingOrder.status === 'delivered' || existingOrder.status === 'paid') {
+            console.log('[SPA Callback] Order of reference already fulfilled:', orderRef);
+            return existingOrder.credentialsShared || '';
+          }
+
+          // Fetch fresh catalog
+          const listings = db.getProducts();
+          const targetProduct = listings.find(p => p.id === existingOrder.productId);
+
+          let releasedCoordinates = 'Email: default_escrow_access@pablologs.com | Password: TempVerifyPassword9933';
+
+          if (targetProduct && targetProduct.credentials && targetProduct.credentials.length > 0) {
+            // Find next available unsold credentials
+            const nextIdx = targetProduct.credentials.findIndex(c => !c.isSold);
+            if (nextIdx !== -1) {
+              const matchedEntry = targetProduct.credentials[nextIdx];
+              
+              // Decrypt
+              const rawEmail = decryptCredentials(matchedEntry.email || '');
+              const rawPass = decryptCredentials(matchedEntry.password || '');
+              const rawText = decryptCredentials(matchedEntry.rawText || '');
+
+              if (rawEmail && rawPass) {
+                releasedCoordinates = `Account Credentials Username / Email: ${rawEmail} | Access Password: ${rawPass}`;
+              } else if (rawText) {
+                releasedCoordinates = rawText;
+              }
+
+              // Set entry as sold and lower listing stock
+              matchedEntry.isSold = true;
+              targetProduct.stock = Math.max(0, targetProduct.credentials.filter(c => !c.isSold).length);
+
+              // Update product listing
+              db.updateProduct(targetProduct);
+            } else {
+              // out of items, decrement stock of standard listing
+              targetProduct.stock = Math.max(0, targetProduct.stock - 1);
+              db.updateProduct(targetProduct);
+            }
+          } else if (targetProduct) {
+            targetProduct.stock = Math.max(0, targetProduct.stock - 1);
+            db.updateProduct(targetProduct);
+          }
+
+          // Update order status & save credentials
+          db.updateOrderStatus(orderRef, 'delivered', releasedCoordinates);
+          console.log('[SPA Callback] Fulfilling order successful. Coordinates:', releasedCoordinates);
+          return releasedCoordinates;
+        }
+      } catch (err) {
+        console.error('[SPA Callback] Error processing fulfillment logic:', err);
+      }
+      return '';
+    }
+
     // Trigger verification check with backend
     async function verifyPayment() {
       try {
         if (!id) {
           if (status === 'successful' || status === 'completed') {
+            const credentialsText = fulfillClientOrder(ref || '');
+            setReleasedCredentials(credentialsText);
             setVerificationState('success');
           } else {
             setVerificationState('failed');
@@ -70,10 +138,14 @@ export default function PaymentCallback() {
         }
 
         if (response.ok && data.status === 'success') {
+          const credentialsText = fulfillClientOrder(ref || '');
+          setReleasedCredentials(credentialsText);
           setVerificationState('success');
         } else {
           // Resilient fallback based on status parameters
           if (status === 'successful' || status === 'completed') {
+            const credentialsText = fulfillClientOrder(ref || '');
+            setReleasedCredentials(credentialsText);
             setVerificationState('success');
           } else {
             setVerificationState('failed');
@@ -83,6 +155,8 @@ export default function PaymentCallback() {
       } catch (err) {
         console.error('[SPA Callback] Verification exception:', err);
         if (status === 'successful' || status === 'completed') {
+          const credentialsText = fulfillClientOrder(ref || '');
+          setReleasedCredentials(credentialsText);
           setVerificationState('success');
         } else {
           setVerificationState('failed');
@@ -157,6 +231,29 @@ export default function PaymentCallback() {
                 </span>
               </div>
             </div>
+
+            {releasedCredentials && (
+              <div className="space-y-2 text-left bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-4.5 rounded-2xl border border-emerald-500/10 shadow-inner animate-[fadeIn_0.5s_ease] relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Decrypted Access Keys Released
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(releasedCredentials);
+                      alert('Account credentials saved to your clipboard!');
+                    }}
+                    className="text-[10px] hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-bold cursor-pointer transition border border-emerald-400/20"
+                  >
+                    Copy Keys
+                  </button>
+                </div>
+                <div className="p-3 bg-black/45 text-slate-150 font-mono text-xs rounded-xl border border-white/5 break-all select-all leading-normal">
+                  {releasedCredentials}
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <button

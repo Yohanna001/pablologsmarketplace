@@ -80,16 +80,6 @@ export default function Navbar({
                   {link.name}
                 </button>
               ))}
-              <button
-                id="nav-link-merchant"
-                onClick={() => {
-                  onBecomeMerchant();
-                  setIsOpen(false);
-                }}
-                className="px-3 py-2 rounded-md text-sm font-medium text-white/80 transition-colors hover:text-white hover:bg-white/10"
-              >
-                Become a Merchant
-              </button>
             </div>
 
             <div className="flex items-center space-x-4 border-l border-[#E0E0E0]/20 pl-6">
@@ -195,16 +185,6 @@ export default function Navbar({
                 {link.name}
               </button>
             ))}
-            <button
-              id="mobile-nav-link-merchant"
-              onClick={() => {
-                onBecomeMerchant();
-                setIsOpen(false);
-              }}
-              className="block w-full text-left px-3 py-2.5 rounded-lg text-base font-medium text-white/80 hover:bg-white/5 hover:text-white transition"
-            >
-              Become a Merchant
-            </button>
           </div>
 
           <div className="border-t border-white/10 pt-4 pb-2">

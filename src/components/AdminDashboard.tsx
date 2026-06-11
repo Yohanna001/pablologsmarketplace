@@ -4,7 +4,7 @@ import {
   ShoppingBag, TrendingUp, AlertCircle, RefreshCw, Layers, ShieldCheck,
   Eye, EyeOff, UploadCloud, Check, X, HelpCircle, Lock, Unlock,
   Database, Trash, Download, FileText, Store, UserX, ToggleLeft, ToggleRight,
-  Clipboard, Search, AlertTriangle, Globe
+  Clipboard, Search, AlertTriangle, Globe, ShoppingCart
 } from 'lucide-react';
 import { ProductListing, User, Order, CredentialEntry, Merchant, TrashItem } from '../types';
 import { db, formatNaira } from '../data';
@@ -907,27 +907,27 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        {/* Card 3: Total partners */}
+        {/* Card 3: Total Escrow Orders */}
         <div className="bg-white p-6 rounded-2xl border border-[#E0E0E0] shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-[#4A4A6A] uppercase tracking-wider block mb-1">Registered Partners</span>
-            <span className="text-2xl font-extrabold text-[#1A1A2E]">{totalMerchantsCount} Merchants</span>
+            <span className="text-xs font-bold text-[#4A4A6A] uppercase tracking-wider block mb-1">Total Escrow Orders</span>
+            <span className="text-2xl font-extrabold text-[#1A1A2E]">{orders.length} Orders</span>
           </div>
-          <div className="p-3 bg-slate-50 text-[#4A4A6A] rounded-xl border border-[#E0E0E0]">
-            <Store className="w-6 h-6" />
+          <div className="p-3 bg-slate-50 text-[#0F3460] rounded-xl border border-[#E0E0E0]">
+            <ShoppingCart className="w-6 h-6" />
           </div>
         </div>
 
-        {/* Card 4: Pending reviews */}
+        {/* Card 4: Registered Shoppers */}
         <div className="bg-white p-6 rounded-2xl border border-[#E0E0E0] shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-[#4A4A6A] uppercase tracking-wider block mb-1">Pending Requests</span>
-            <span className={`text-2xl font-extrabold ${pendingMerchantsCount > 0 ? 'text-[#E94560]' : 'text-slate-700'}`}>
-              {pendingMerchantsCount} Pending
+            <span className="text-xs font-bold text-[#4A4A6A] uppercase tracking-wider block mb-1">Registered Shoppers</span>
+            <span className="text-2xl font-extrabold text-[#1A1A2E]">
+              {users.filter(u => u.role === 'buyer').length} Buyers
             </span>
           </div>
-          <div className={`p-3 rounded-xl border ${pendingMerchantsCount > 0 ? 'bg-rose-50 text-[#E94560] border-rose-100' : 'bg-slate-50 text-[#4A4A6A] border-[#E0E0E0]'}`}>
-            <ShieldAlert className="w-6 h-6" />
+          <div className="p-3 bg-slate-50 text-[#0F3460] rounded-xl border border-[#E0E0E0]">
+            <Users className="w-6 h-6" />
           </div>
         </div>
 
@@ -947,21 +947,7 @@ export default function AdminDashboard({
           📂 Assets ({activeProductsList.length})
         </button>
 
-        {/* Merchants Tab button with Notification badge */}
-        <button
-          id="admin-tab-merchants"
-          onClick={() => setActiveTab('merchants')}
-          className={`px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-            activeTab === 'merchants' ? 'border-[#0F3460] text-[#0F3460] font-bold' : 'border-transparent text-slate-400 hover:text-[#0F3460]'
-          }`}
-        >
-          👥 Merchants
-          {pendingMerchantsCount > 0 && (
-            <span className="bg-[#E94560] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full select-none animate-bounce">
-              🔴 {pendingMerchantsCount}
-            </span>
-          )}
-        </button>
+
 
         {/* Orders Tab button */}
         <button
@@ -1345,7 +1331,7 @@ export default function AdminDashboard({
       )}
 
       {/* Tab 2: MERCHANTS MANAGEMENT VIEW (NEW) */}
-      {activeTab === 'merchants' && (
+      {false && (
         <div id="admin-merchants-view" className="space-y-6">
           
           {/* Filters & Export Options Bar */}
