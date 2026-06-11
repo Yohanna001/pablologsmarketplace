@@ -5,6 +5,53 @@
     <script>
       // Early interceptor for sandboxed preview HMR/WebSocket benign rejections
       (function() {
+        // 1. Hook console.error to silence Vite HMR connection logs safely
+        const originalConsoleError = console.error;
+        console.error = function(...args) {
+          if (args[0] && typeof args[0] === 'string' && (
+            args[0].includes('failed to connect to websocket') ||
+            args[0].includes('[vite] failed to connect') ||
+            args[0].includes('WebSocket closed without opened')
+          )) {
+            return;
+          }
+          originalConsoleError.apply(console, args);
+        };
+
+        // 2. Hook WebSocket to cleanly bypass Vite HMR connection attempts
+        const OriginalWebSocket = window.WebSocket;
+        if (OriginalWebSocket) {
+          window.WebSocket = function(url, protocols) {
+            const isViteHmr = typeof url === 'string' && (
+              url.includes('vite') ||
+              url.includes('hmr') ||
+              (protocols && (protocols === 'vite-hmr' || (Array.isArray(protocols) && protocols.includes('vite-hmr'))))
+            );
+            if (isViteHmr) {
+              const dummySocket = {
+                url: url,
+                readyState: 3, // CLOSED
+                bufferedAmount: 0,
+                extensions: '',
+                protocol: '',
+                binaryType: 'blob',
+                addEventListener: function() {},
+                removeEventListener: function() {},
+                send: function() {},
+                close: function() {},
+                onerror: null,
+                onmessage: null,
+                onopen: null,
+                onclose: null,
+              };
+              return dummySocket;
+            }
+            return new OriginalWebSocket(url, protocols);
+          };
+          Object.setPrototypeOf(window.WebSocket, OriginalWebSocket);
+          window.WebSocket.prototype = OriginalWebSocket.prototype;
+        }
+
         window.addEventListener('unhandledrejection', function(event) {
           try {
             const reason = event.reason;

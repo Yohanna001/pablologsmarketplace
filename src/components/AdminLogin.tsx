@@ -67,13 +67,15 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
         }
       } else {
         // GitHub Pages or Vercel Static fallback check
-        if (email.trim().toLowerCase() === 'admin@purelogsmartketaplace.com' && password === 'Admin@123') {
+        const cleanEmail = email.trim().toLowerCase();
+        const isBypass = (cleanEmail === 'admin@purelogsmartketaplace.com' || cleanEmail === 'admin@pablologsmarketplace.com') && password === 'Admin@123';
+        if (isBypass) {
           console.warn('Backend is offline/static. Bypassing login in Offline Sandbox Mode.');
           const payload = {
             id: 'mock-admin',
-            email: 'admin@purelogsmartketaplace.com',
+            email: cleanEmail,
             name: 'Lead Site Administrator',
-            role: 'admin',
+            role: 'super_admin',
             exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24)
           };
           const dummyToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + window.btoa(JSON.stringify(payload)) + '.dummy-signature';
@@ -91,19 +93,21 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
         setErrorMsg(data.message || 'Invalid email or password');
       }
     } catch (err) {
-      if (email.trim().toLowerCase() === 'admin@purelogsmartketaplace.com' && password === 'Admin@123') {
+      const cleanEmail = email.trim().toLowerCase();
+      const isBypass = (cleanEmail === 'admin@purelogsmartketaplace.com' || cleanEmail === 'admin@pablologsmarketplace.com') && password === 'Admin@123';
+      if (isBypass) {
         console.warn('Backend unreachable. Bypassing login in Offline Sandbox Mode.');
         const payload = {
           id: 'mock-admin',
-          email: 'admin@purelogsmartketaplace.com',
+          email: cleanEmail,
           name: 'Lead Site Administrator',
-          role: 'admin',
+          role: 'super_admin',
           exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24)
         };
         const dummyToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + window.btoa(JSON.stringify(payload)) + '.dummy-signature';
         onLoginSuccess(payload, dummyToken);
         setLoading(false);
-        return;
+         return;
       }
       setErrorMsg('Login failed. Connection refused or ad-blocker interfered.');
     } finally {
@@ -513,8 +517,9 @@ export default function AdminLogin({ onLoginSuccess, onNavigate }: AdminLoginPro
           <span>Quick Seeding Cheat Sheet</span>
         </div>
         <p>Default login for fast review:</p>
-        <div className="font-mono bg-black/30 p-2 rounded border border-white/5 text-slate-300 space-y-0.5 select-all">
-          <div><b className="text-[#E94560]">Email:</b> admin@purelogsmartketaplace.com</div>
+        <div className="font-mono bg-black/30 p-2 rounded border border-white/5 text-slate-300 space-y-1 select-all text-[10px]">
+          <div><b className="text-[#E94560]">Email (seeded):</b> admin@pablologsmarketplace.com</div>
+          <div><b className="text-[#E94560]">Email (alt):</b> admin@purelogsmartketaplace.com</div>
           <div><b className="text-[#E94560]">Password:</b> Admin@123</div>
         </div>
       </div>

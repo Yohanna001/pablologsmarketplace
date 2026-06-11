@@ -35,19 +35,38 @@ const LOGS_FILE = path.join(DATA_DIR, 'admin-logs.json');
 // In-Memory Rate Limiting & Lockout State
 const loginAttempts: Record<string, { count: number; expiresAt: number }> = {};
 
+// In-Memory Fallback Caches for Read-Only Environments (e.g. Vercel)
+let adminsCache: Admin[] | null = null;
+let logsCache: AdminLog[] | null = null;
+
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.warn('Could not create data directory (probably read-only filesystem):', err);
   }
 }
 
 export const adminDb = {
   getAdmins(): Admin[] {
+    if (adminsCache) {
+      return adminsCache;
+    }
+
     ensureDataDir();
     let admins: Admin[] = [];
     let isNew = false;
 
-    if (!fs.existsSync(ADMINS_FILE)) {
+    let fileExists = false;
+    try {
+      fileExists = fs.existsSync(ADMINS_FILE);
+    } catch (_) {
+      fileExists = false;
+    }
+
+    if (!fileExists) {
       // Seed default admin
       const defaultPassword = process.env.ADMIN_PASSWORD || 'Admin@123';
       const defaultEmail = process.env.ADMIN_EMAIL || 'admin@pablologsmarketplace.com';
@@ -104,6 +123,8 @@ export const adminDb = {
       }
     }
 
+    adminsCache = admins;
+
     if (didChange && admins.length > 0) {
       this.saveAdmins(admins);
     }
@@ -112,28 +133,53 @@ export const adminDb = {
   },
 
   saveAdmins(admins: Admin[]) {
+    adminsCache = admins;
     ensureDataDir();
-    fs.writeFileSync(ADMINS_FILE, JSON.stringify(admins, null, 2), 'utf-8');
+    try {
+      fs.writeFileSync(ADMINS_FILE, JSON.stringify(admins, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn('Could not write admins file (read-only filesystem):', err);
+    }
   },
 
   getLogs(): AdminLog[] {
+    if (logsCache) {
+      return logsCache;
+    }
+
     ensureDataDir();
-    if (!fs.existsSync(LOGS_FILE)) {
+    let fileExists = false;
+    try {
+      fileExists = fs.existsSync(LOGS_FILE);
+    } catch (_) {
+      fileExists = false;
+    }
+
+    if (!fileExists) {
       this.saveLogs([]);
+      logsCache = [];
       return [];
     }
     try {
       const content = fs.readFileSync(LOGS_FILE, 'utf-8');
-      return JSON.parse(content);
+      const parsedLogs = JSON.parse(content);
+      logsCache = parsedLogs;
+      return parsedLogs;
     } catch (e) {
       console.error('Failed to parse admin-logs.json, returning empty list', e);
+      logsCache = [];
       return [];
     }
   },
 
   saveLogs(logs: AdminLog[]) {
+    logsCache = logs;
     ensureDataDir();
-    fs.writeFileSync(LOGS_FILE, JSON.stringify(logs, null, 2), 'utf-8');
+    try {
+      fs.writeFileSync(LOGS_FILE, JSON.stringify(logs, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn('Could not write logs file (read-only filesystem):', err);
+    }
   },
 
   addLog(adminId: string, email: string, action: string, details: string, ip: string, userAgent: string): AdminLog {
