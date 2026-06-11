@@ -633,7 +633,7 @@ export default function App() {
         {/* VIEW 3: SECURE PHYSICAL ADMIN PATH ROUTES */}
         {(relativePath.startsWith('/admin') || relativePath === '/admin-login') && (
           <div id="secure-admin-routes-wrapper" className="animate-[fadeIn_0.3s_ease]">
-            {relativePath === '/admin-login' || relativePath === '/admin/login' ? (
+            {relativePath === '/admin-login' || relativePath === '/admin/login' || (!adminSession && !isVerifyingAdmin && relativePath.startsWith('/admin')) ? (
               <AdminLogin
                 onLoginSuccess={(adminData, token) => handleAdminLoginSuccess(token, adminData)}
                 onNavigate={(path) => navigateTo(path)}

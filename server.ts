@@ -569,10 +569,15 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server listening at http://localhost:${PORT}`);
-    console.log(`Default Super Admin seeded as admin@purelogsmartketaplace.com`);
-  });
+  // Only listen if not running in a Serverless environment like Vercel
+  if (!process.env.VERCEL) {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server listening at http://localhost:${PORT}`);
+      console.log(`Default Super Admin seeded as admin@purelogsmartketaplace.com`);
+    });
+  }
 }
 
 startServer();
+
+export default app;
