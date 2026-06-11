@@ -4,9 +4,10 @@ import { Heart, Shield, HelpCircle, Mail, Globe, Sparkles } from 'lucide-react';
 interface FooterProps {
   onNavigateSection: (sectionId: string) => void;
   onOpenAuth: (view: 'login' | 'signup') => void;
+  onGoToAdmin?: () => void;
 }
 
-export default function Footer({ onNavigateSection, onOpenAuth }: FooterProps) {
+export default function Footer({ onNavigateSection, onOpenAuth, onGoToAdmin }: FooterProps) {
   const handleLinkClick = (e: React.MouseEvent, sectionId: string) => {
     e.preventDefault();
     const element = document.getElementById(sectionId);
@@ -125,6 +126,16 @@ export default function Footer({ onNavigateSection, onOpenAuth }: FooterProps) {
                   Security
                 </a>
               </li>
+              {onGoToAdmin && (
+                <li className="pt-1.5 border-t border-white/5">
+                  <button
+                    onClick={onGoToAdmin}
+                    className="text-[#FAFAFC]/80 hover:text-white font-bold transition-colors flex items-center gap-1 cursor-pointer text-left"
+                  >
+                    🔐 Admin Portal
+                  </button>
+                </li>
+              )}
             </ul>
           </div>
 

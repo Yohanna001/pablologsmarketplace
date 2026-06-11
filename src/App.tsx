@@ -32,9 +32,20 @@ const getBasePath = (): string => {
 
 const basePath = getBasePath();
 
+// Parse initial route checking both physical paths and hash fallback for GitHub Pages
+const getInitialPath = (): string => {
+  if (typeof window === 'undefined') return '/';
+  const hash = window.location.hash;
+  if (hash && hash.startsWith('#/')) {
+    const target = hash.substring(1);
+    return basePath ? `${basePath}${target}` : target;
+  }
+  return window.location.pathname;
+};
+
 export default function App() {
   // Navigation & Pathname Physical Routing
-  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [currentPath, setCurrentPath] = useState(getInitialPath());
   const [view, setView] = useState<'landing' | 'marketplace' | 'admin' | 'payment-callback' | 'deployment-assets'>('landing');
   const [activeNavTab, setActiveNavTab] = useState('home');
 
@@ -42,6 +53,9 @@ export default function App() {
   let relativePath = currentPath;
   if (basePath && currentPath.startsWith(basePath)) {
     relativePath = currentPath.substring(basePath.length);
+  }
+  if (typeof window !== 'undefined' && window.location.hash && window.location.hash.startsWith('#/')) {
+    relativePath = window.location.hash.substring(1);
   }
   if (relativePath === '') relativePath = '/';
 
@@ -54,21 +68,39 @@ export default function App() {
 
   // Physical routing navigate helper
   const navigateTo = (path: string) => {
-    const targetWithBase = (basePath && !path.startsWith(basePath)) 
-      ? `${basePath}${path === '/' ? '/' : path}` 
-      : path;
-    window.history.pushState(null, '', targetWithBase);
-    setCurrentPath(targetWithBase);
+    const isGitHubPages = typeof window !== 'undefined' && (
+      window.location.hostname.includes('github.io') || 
+      window.location.hostname.includes('vercel.app')
+    );
+
+    if (isGitHubPages) {
+      window.history.pushState(null, '', `#${path}`);
+      setCurrentPath(basePath ? `${basePath}${path}` : path);
+    } else {
+      const targetWithBase = (basePath && !path.startsWith(basePath)) 
+        ? `${basePath}${path === '/' ? '/' : path}` 
+        : path;
+      window.history.pushState(null, '', targetWithBase);
+      setCurrentPath(targetWithBase);
+    }
   };
 
   // Physical Router Path synchronizer
   useEffect(() => {
     const handleLocationChange = () => {
-      setCurrentPath(window.location.pathname);
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#/')) {
+        const target = hash.substring(1);
+        setCurrentPath(basePath ? `${basePath}${target}` : target);
+      } else {
+        setCurrentPath(window.location.pathname);
+      }
     };
     window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
     return () => {
       window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
     };
   }, []);
 
@@ -77,6 +109,9 @@ export default function App() {
     let rel = currentPath;
     if (basePath && currentPath.startsWith(basePath)) {
       rel = currentPath.substring(basePath.length);
+    }
+    if (typeof window !== 'undefined' && window.location.hash && window.location.hash.startsWith('#/')) {
+      rel = window.location.hash.substring(1);
     }
     if (rel === '') rel = '/';
 
@@ -657,6 +692,7 @@ export default function App() {
           }, 150);
         }}
         onOpenAuth={(v) => setAuthModal({ isOpen: true, view: v })}
+        onGoToAdmin={() => handleViewChange('admin')}
       />
 
       {/* OVERLAY MODAL 4: Become a Merchant Application */}

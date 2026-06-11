@@ -95,28 +95,6 @@ export default function AuthModal({ onClose, onLoginSuccess, initialView = 'logi
     }
   };
 
-  // Quick 1-click logins for easy inspection!
-  const demoLogins = [
-    { label: 'Sarah (Buyer)', email: 'buyer@customer.com', role: 'buyer' },
-    { label: 'Premium Sounds (Approved Merchant)', email: 'merchant@seller.com', role: 'merchant' },
-    { label: 'FastStream (Pending Merchant)', email: 'pending_merchant@seller.com', role: 'merchant' },
-    { label: 'Platform Administrator', email: 'admin@pablologs.com', role: 'admin' },
-  ];
-
-  const handleDemoLogin = (emailStr: string) => {
-    setError('');
-    setSuccess('');
-    const users = db.getUsers();
-    const matched = users.find(u => u.email === emailStr);
-    
-    if (matched) {
-      setSuccess(`Signed in as ${matched.name} (${matched.role})!`);
-      setTimeout(() => {
-        onLoginSuccess(matched);
-        onClose();
-      }, 700);
-    }
-  };
 
   return (
     <div id="auth-modal-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
@@ -316,33 +294,6 @@ export default function AuthModal({ onClose, onLoginSuccess, initialView = 'logi
             </button>
           </div>
 
-          {/* Demo 1-Click login panel */}
-          <div className="mt-6 border-t border-[#E0E0E0]/40 pt-5">
-            <div className="flex items-center gap-1.5 mb-3 text-slate-400">
-              <ShieldCheck className="w-4 h-4 text-[#0F3460]" />
-              <span className="text-[10px] font-bold text-[#4A4A6A] uppercase tracking-wider">Fast-Tester Quick Access</span>
-            </div>
-            
-            <div className="space-y-2">
-              {demoLogins.map((demo) => (
-                <button
-                  key={demo.email}
-                  type="button"
-                  id={`demo-login-${demo.email.split('@')[0]}`}
-                  onClick={() => handleDemoLogin(demo.email)}
-                  className="w-full text-left p-2 rounded-lg bg-[#F5F5F7] hover:bg-slate-50 border border-[#E0E0E0] text-[11px] text-[#1A1A2E] font-medium transition flex items-center justify-between cursor-pointer"
-                >
-                  <span className="flex items-center gap-1">
-                    <CornerDownRight className="w-3.5 h-3.5 text-slate-400" />
-                    {demo.label}
-                  </span>
-                  <span className="text-[9px] bg-white text-[#0F3460] border border-[#E0E0E0] px-1.5 py-0.5 rounded capitalize font-semibold">
-                    {demo.role}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
 
         </div>
 

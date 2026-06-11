@@ -4,7 +4,7 @@ import {
   ShoppingBag, TrendingUp, AlertCircle, RefreshCw, Layers, ShieldCheck,
   Eye, EyeOff, UploadCloud, Check, X, HelpCircle, Lock, Unlock,
   Database, Trash, Download, FileText, Store, UserX, ToggleLeft, ToggleRight,
-  Clipboard, Search, AlertTriangle
+  Clipboard, Search, AlertTriangle, Globe
 } from 'lucide-react';
 import { ProductListing, User, Order, CredentialEntry, Merchant, TrashItem } from '../types';
 import { db, formatNaira } from '../data';
@@ -20,8 +20,8 @@ interface AdminDashboardProps {
   adminSession?: any;
   adminToken?: string;
   onAdminLogout?: () => void;
-  activeTab?: 'listings' | 'merchants' | 'orders' | 'users' | 'trash' | 'create' | 'supabase' | 'settings';
-  onTabChange?: (tab: 'listings' | 'merchants' | 'orders' | 'users' | 'trash' | 'create' | 'supabase' | 'settings') => void;
+  activeTab?: 'listings' | 'merchants' | 'orders' | 'users' | 'trash' | 'create' | 'supabase' | 'settings' | 'webhooks';
+  onTabChange?: (tab: 'listings' | 'merchants' | 'orders' | 'users' | 'trash' | 'create' | 'supabase' | 'settings' | 'webhooks') => void;
 }
 
 export default function AdminDashboard({ 
@@ -36,8 +36,8 @@ export default function AdminDashboard({
   activeTab: propActiveTab,
   onTabChange
 }: AdminDashboardProps) {
-  // Tabs Navigation: listings, merchants, orders, users, trash, create, supabase, settings
-  const [localActiveTab, setLocalActiveTab] = useState<'listings' | 'merchants' | 'orders' | 'users' | 'trash' | 'create' | 'supabase' | 'settings'>('listings');
+  // Tabs Navigation: listings, merchants, orders, users, trash, create, supabase, settings, webhooks
+  const [localActiveTab, setLocalActiveTab] = useState<'listings' | 'merchants' | 'orders' | 'users' | 'trash' | 'create' | 'supabase' | 'settings' | 'webhooks'>('listings');
 
   const activeTab = propActiveTab || localActiveTab;
   const setActiveTab = (tab: any) => {
@@ -97,6 +97,71 @@ export default function AdminDashboard({
       fetchLogs();
     }
   }, [activeTab, adminToken]);
+
+  // --- FLUTTERWAVE WEBHOOK SIMULATION ENGINE STATICS & ACTIONS ---
+  const [webhookSimSecret, setWebhookSimSecret] = useState('MyEscrowSecureHash2026');
+  const [webhookSimRef, setWebhookSimRef] = useState('');
+  const [webhookSimAmount, setWebhookSimAmount] = useState('25000');
+  const [webhookSimStatus, setWebhookSimStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [webhookSimFeedback, setWebhookSimFeedback] = useState('');
+
+  useEffect(() => {
+    if (orders && orders.length > 0 && !webhookSimRef) {
+      setWebhookSimRef(orders[0].id || '');
+      setWebhookSimAmount(String(orders[0].amount || '25000'));
+    }
+  }, [orders, activeTab]);
+
+  const runWebhookSimulation = async () => {
+    if (!webhookSimRef) {
+      setWebhookSimStatus('failed');
+      setWebhookSimFeedback('Please select or specify a clean transaction reference code.');
+      return;
+    }
+
+    setWebhookSimStatus('testing');
+    setWebhookSimFeedback('Constructing and transmitting mock charge.completed event payload containing secure headers. Please wait...');
+
+    try {
+      const payload = {
+        event: 'charge.completed',
+        data: {
+          id: Math.floor(1000000 + Math.random() * 9000000).toString(),
+          tx_ref: webhookSimRef,
+          amount: Number(webhookSimAmount),
+          currency: 'NGN',
+          status: 'successful',
+          customer: {
+            email: 'buyer@customer.com',
+            name: 'Sarah Customer'
+          }
+        }
+      };
+
+      const response = await fetch('/api/flutterwave/webhook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'verif-hash': webhookSimSecret
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setWebhookSimStatus('success');
+        setWebhookSimFeedback(`🎉 Webhook validated and verified successfully!\n\nStatus code: ${response.status} OK\nServer Response Payload:\n${JSON.stringify(data, null, 2)}`);
+        onRefreshData();
+      } else {
+        setWebhookSimStatus('failed');
+        setWebhookSimFeedback(`❌ Webhook payload rejected or signature unmatched!\n\nStatus code: ${response.status}\nServer Error Response:\n${JSON.stringify(data, null, 2)}\n\n💡 Reason:\n1. If a FLUTTERWAVE_WEBHOOK_SECRET has been loaded in your .env or server environment, your simulator input signature "${webhookSimSecret}" must match it exactly.\n2. In production setups, Flutterwave's transaction validation service will crosscheck fake transactions against real API logs and reject fraud attempts.`);
+      }
+    } catch (err: any) {
+      setWebhookSimStatus('failed');
+      setWebhookSimFeedback(`⚠️ Network Connection Refused: ${err.message || err}`);
+    }
+  };
 
   // Execute password change query
   const handlePasswordChangeSubmit = async (e: React.FormEvent) => {
@@ -982,6 +1047,17 @@ export default function AdminDashboard({
           }`}
         >
           ⚙️ Settings & Logs
+        </button>
+
+        {/* Webhooks Tab Button */}
+        <button
+          id="admin-tab-webhooks"
+          onClick={() => setActiveTab('webhooks')}
+          className={`px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'webhooks' ? 'border-[#0F3460] text-[#0F3460] font-bold' : 'border-transparent text-slate-400 hover:text-[#0F3460]'
+          }`}
+        >
+          ⚓ Flutterwave Webhooks
         </button>
 
       </div>
@@ -2506,6 +2582,283 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
                 </table>
               </div>
             )}
+          </div>
+
+        </div>
+      )}
+
+      {/* Tab 9: DEDICATED FLUTTERWAVE WEBHOOK MONITOR & INTEGRATION WORKSPACE */}
+      {activeTab === 'webhooks' && (
+        <div id="admin-webhooks-view" className="space-y-8 animate-[fadeIn_0.25s_ease]">
+          
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-[#1A1A2E] to-[#16213E] p-6 rounded-2xl border border-slate-700/35 text-white shadow-md">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[10px] bg-[#0F3460] text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold tracking-wider uppercase">Integration Hub</span>
+                </div>
+                <div className="space-y-1">
+                  <h2 className="font-heading font-extrabold text-[#FAFAFC] text-xl tracking-tight flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-emerald-400 animate-pulse" />
+                    Flutterwave Webhooks System
+                  </h2>
+                  <p className="text-xs text-slate-300 font-sans max-w-2xl leading-relaxed">
+                    Configure real-time automated order delivery, handle escrow deposits, and secure payment signals using verified signature hashes.
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white/5 border border-white/10 p-4.5 rounded-2xl max-w-sm shrink-0">
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Dynamic Production Webhook URL</div>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="font-mono text-xs text-emerald-400 select-all truncate max-w-[180px]">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/flutterwave/webhook` : '/api/flutterwave/webhook'}
+                  </span>
+                  <button 
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        navigator.clipboard.writeText(`${window.location.origin}/api/flutterwave/webhook`);
+                        alert('Dynamic webhook path successfully copied to clipboard!');
+                      }
+                    }}
+                    className="p-1.5 px-3 bg-[#0F3460] hover:bg-emerald-600 text-[10px] font-bold rounded-lg cursor-pointer transition flex items-center gap-1 shrink-0 text-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            {/* Guide column (7 cols) */}
+            <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-[#E0E0E0] shadow-sm space-y-6">
+              
+              <div className="border-b pb-4">
+                <h3 className="font-heading font-extrabold text-[#1A1A2E] text-base flex items-center gap-1.5">
+                  🛡️ How To Create / Secure a Flutterwave Webhook Secret
+                </h3>
+                <p className="text-xs text-[#4A4A6A] mt-1">
+                  Follow these step-by-step instructions to link, authenticate, and run your automated escrow payment updates.
+                </p>
+              </div>
+
+              <div className="space-y-5 font-sans">
+                
+                {/* Step 1 */}
+                <div className="flex gap-4">
+                  <div className="flex-none w-7 h-7 bg-slate-100 rounded-full border border-slate-300 flex items-center justify-center font-bold text-xs text-[#1A1A2E]">
+                    1
+                  </div>
+                  <div className="space-y-1 mt-0.5">
+                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Log In to Flutterwave</h4>
+                    <p className="text-xs text-[#4A4A6A]">
+                      Navigate to your <strong>official Flutterwave Dashboard</strong> (either in Test or Production Mode) at <a href="https://dashboard.flutterwave.com" target="_blank" rel="noopener noreferrer" className="text-[#0F3460] font-bold hover:underline">dashboard.flutterwave.com</a>.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="flex gap-4">
+                  <div className="flex-none w-7 h-7 bg-slate-100 rounded-full border border-slate-300 flex items-center justify-center font-bold text-xs text-[#1A1A2E]">
+                    2
+                  </div>
+                  <div className="space-y-1 mt-0.5">
+                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Navigate to Webhooks Settings</h4>
+                    <p className="text-xs text-[#4A4A6A]">
+                      From the left sidebar, click on <strong>Settings</strong>, and select the <strong>Webhooks</strong> tab option from the top preferences menu.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="flex gap-4">
+                  <div className="flex-none w-7 h-7 bg-slate-100 rounded-full border border-slate-300 flex items-center justify-center font-bold text-xs text-[#1A1A2E]">
+                    3
+                  </div>
+                  <div className="space-y-1 mt-0.5">
+                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Configure the Webhook URL</h4>
+                    <p className="text-xs text-[#4A4A6A]">
+                      Paste the dynamic callback URL below. When your application is deployed on Vercel, it routes all backend notifications instantly:
+                    </p>
+                    <div className="bg-[#FAFAFC] border border-slate-200 p-2.5 rounded-lg flex items-center justify-between mt-1 text-[11px] font-mono select-all">
+                      <span className="text-[#0F3460] truncate mr-2 font-bold">
+                        {typeof window !== 'undefined' ? `${window.location.origin}/api/flutterwave/webhook` : 'https://your-site.vercel.app/api/flutterwave/webhook'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 4 */}
+                <div className="flex gap-4">
+                  <div className="flex-none w-7 h-7 bg-[#0F3460] rounded-full border border-[#0F3460] flex items-center justify-center font-bold text-xs text-white">
+                    4
+                  </div>
+                  <div className="space-y-1 mt-0.5">
+                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Create a Secret Hash (Your Webhook Secret Key)</h4>
+                    <p className="text-xs text-[#4A4A6A] leading-relaxed">
+                      In the <strong>Secret Hash</strong> text field on Flutterwave, type a custom hidden key (random alphanumeric code of your choice). For example: <code className="bg-rose-50 border border-rose-150 px-1.5 py-0.5 rounded text-[#E94560] font-mono font-bold text-[10px]">MyEscrowSecureHash2026</code>.
+                      Flutterwave will sign all callback notifications with this secret so that other servers are prevented from sending fraudulent reports.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 5 */}
+                <div className="flex gap-4">
+                  <div className="flex-none w-7 h-7 bg-slate-100 rounded-full border border-slate-300 flex items-center justify-center font-bold text-xs text-[#1A1A2E]">
+                    2
+                  </div>
+                  <div className="space-y-1 mt-0.5">
+                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Subscribe to Events</h4>
+                    <p className="text-xs text-[#4A4A6A]">
+                      Check the box labeled <strong><code>charge.completed</code></strong>. Save the setting on Flutterwave to prime the automatic triggers.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 6 */}
+                <div className="flex gap-4">
+                  <div className="flex-none w-7 h-7 bg-emerald-600 rounded-full border border-emerald-600 flex items-center justify-center font-bold text-xs text-white">
+                    ✓
+                  </div>
+                  <div className="space-y-1 mt-0.5">
+                    <h4 className="text-xs font-extrabold text-emerald-800">Add key to Vercel/Server Config</h4>
+                    <p className="text-xs text-[#4A4A6A] leading-relaxed">
+                      On Vercel, open your project settings dashboard and register the signature under <strong>Environment Variables</strong>:
+                    </p>
+                    <div className="bg-slate-900 text-slate-100 p-3 rounded-xl mt-1.5 text-[10.5px] font-mono space-y-1 border border-white/5">
+                      <div><span className="text-pink-400">Key:</span> FLUTTERWAVE_WEBHOOK_SECRET</div>
+                      <div><span className="text-pink-400">Value:</span> (Paste the exact same Secret Hash you typed in Step 4)</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Sandbox Simulator & Diagnostics column (5 cols) */}
+            <div className="lg:col-span-5 space-y-6">
+              
+              <div className="bg-white p-6 rounded-2xl border border-[#E0E0E0] shadow-sm space-y-5">
+                <div className="border-b pb-3.5">
+                  <h3 className="font-heading font-extrabold text-[#1A1A2E] text-sm flex items-center gap-1.5">
+                    <RefreshCw className="w-4 h-4 text-emerald-600 animate-spin-slow" />
+                    Interactive Sandbox Webhook Simulator
+                  </h3>
+                  <p className="text-[11px] text-[#4A4A6A] mt-1 leading-relaxed">
+                    Manually payload-test signature verification compliance and post-payment inventory release rules.
+                  </p>
+                </div>
+
+                <div className="space-y-4 font-sans text-xs">
+                  
+                  {/* Test Signature Input */}
+                  <div className="space-y-1 mr-0.5">
+                    <label className="text-[10px] font-bold text-[#4A4A6A] uppercase tracking-wider block">Signature Hash (verif-hash Header)</label>
+                    <input
+                      type="text"
+                      value={webhookSimSecret}
+                      onChange={(e) => setWebhookSimSecret(e.target.value)}
+                      placeholder="MyEscrowSecureHash2026"
+                      className="w-full bg-[#FAFAFC] border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#0F3460] text-[#1A1A2E]"
+                    />
+                    <div className="text-[9px] text-[#4A4A6A]">
+                      Secures dynamic simulation matching.
+                    </div>
+                  </div>
+
+                  {/* Test Reference No */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-[#4A4A6A] uppercase tracking-wider block">Order Reference ID (tx_ref)</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={webhookSimRef}
+                        onChange={(e) => {
+                          setWebhookSimRef(e.target.value);
+                          const chosen = orders.find(o => o.id === e.target.value);
+                          if (chosen) setWebhookSimAmount(String(chosen.amount));
+                        }}
+                        className="flex-1 bg-[#FAFAFC] border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-[#1A1A2E]"
+                      >
+                        <option value="">-- Choose Active Order --</option>
+                        {orders.map(o => (
+                          <option key={o.id} value={o.id}>
+                            {o.id} ({o.buyerName.split(' ')[0]} - {formatNaira(o.amount)})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={webhookSimRef}
+                        onChange={(e) => setWebhookSimRef(e.target.value)}
+                        placeholder="Custom Ref"
+                        className="w-1/3 bg-[#FAFAFC] border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-mono text-[#1A1A2E]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Amount to Simulate */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-[#4A4A6A] uppercase tracking-wider block">Simulated Transaction Amount (NGN)</label>
+                    <input
+                      type="number"
+                      value={webhookSimAmount}
+                      onChange={(e) => setWebhookSimAmount(e.target.value)}
+                      placeholder="e.g. 25000"
+                      className="w-full bg-[#FAFAFC] border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono text-[#1A1A2E]"
+                    />
+                  </div>
+
+                  <button
+                    onClick={runWebhookSimulation}
+                    disabled={webhookSimStatus === 'testing'}
+                    className="w-full min-h-[40px] px-5 py-2.5 bg-[#0F3460] hover:bg-[#16213E] disabled:bg-slate-300 text-white font-bold text-xs rounded-full transition shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {webhookSimStatus === 'testing' ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Transmitting Simulation...
+                      </>
+                    ) : (
+                      <>
+                        ⚡ Fire Webhook Event Signal
+                      </>
+                    )}
+                  </button>
+
+                  {/* Simulator Response Pane */}
+                  {webhookSimStatus !== 'idle' && (
+                    <div className="space-y-2 animate-[fadeIn_0.2s_ease]">
+                      <span className="text-[10px] font-bold text-[#4A4A6A] uppercase tracking-wider block">Simulator Log Console</span>
+                      <div className={`p-3.5 rounded-xl border text-[11px] font-mono whitespace-pre-wrap max-h-56 overflow-y-auto ${
+                        webhookSimStatus === 'success' 
+                          ? 'bg-emerald-50 border-emerald-150 text-emerald-950 font-bold' 
+                          : webhookSimStatus === 'testing'
+                          ? 'bg-slate-50 border-slate-200 text-slate-700 animate-pulse'
+                          : 'bg-rose-50 border-rose-150 text-rose-950'
+                      }`}>
+                        {webhookSimFeedback}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+
+              {/* Secure Handshake Logic Info */}
+              <div className="bg-[#FAFAFC] p-4.5 rounded-2xl border border-slate-200 text-[11px] text-[#4A4A6A] space-y-2">
+                <span className="font-bold text-[#1A1A2E] flex items-center gap-1">
+                  🔒 Anti-Fraud Handshake Checklist
+                </span>
+                <p className="leading-relaxed">
+                  Your server executes a strict Double-Verification model. When a Webhook reports an order payment, the system is designed to immediately connect back to the official <code>api.flutterwave.com</code> gateways to double-verify the transaction details against original logs before releasing credentials. This blocks injection and payload attacks completely.
+                </p>
+              </div>
+
+            </div>
+
           </div>
 
         </div>

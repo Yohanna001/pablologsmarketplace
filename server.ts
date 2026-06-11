@@ -366,8 +366,11 @@ app.post('/api/flutterwave/initialize-payment', async (req: Request, res: Respon
     const publicKey = process.env.FLUTTERWAVE_PUBLIC_KEY;
     const subaccountId = process.env.FLUTTERWAVE_SUBACCOUNT_ID;
     
-    // Determine the redirect base domain, fallback if not specified to standard origins
-    const domain = process.env.NEXT_PUBLIC_BASE_URL || `http://${req.headers.host || 'localhost:3000'}`;
+    // Determine the redirect base domain dynamically from incoming headers to support any domain automatically
+    const host = req.headers.host || 'localhost:3000';
+    const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.secure || req.headers['x-forwarded-ssl'] === 'on';
+    const protocol = isHttps ? 'https' : 'http';
+    const domain = `${protocol}://${host}`;
     const redirectUrl = `${domain}/payment/callback`;
 
     if (!secretKey) {

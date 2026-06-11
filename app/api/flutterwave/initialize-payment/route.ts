@@ -23,8 +23,10 @@ export async function POST(req: Request) {
     const publicKey = process.env.FLUTTERWAVE_PUBLIC_KEY;
     const subaccountId = process.env.FLUTTERWAVE_SUBACCOUNT_ID;
     
-    // Fallback: use NEXT_PUBLIC_BASE_URL or dynamically fallback to standard headers
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    // Determine the redirect base domain dynamically from the incoming request headers to support any domain without configuration
+    const host = req.headers.get('host') || 'localhost:3000';
+    const protocol = req.headers.get('x-forwarded-proto') || 'https';
+    const baseUrl = `${protocol}://${host}`;
     const redirectUrl = `${baseUrl}/payment/callback`;
 
     // Ensure API keys are present
