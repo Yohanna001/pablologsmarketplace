@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import About from './components/About';
@@ -32,22 +33,19 @@ const getBasePath = (): string => {
 
 const basePath = getBasePath();
 
-// Parse initial route checking both physical paths and hash fallback for GitHub Pages
-const getInitialPath = (): string => {
-  if (typeof window === 'undefined') return '/';
-  const hash = window.location.hash;
-  if (hash && hash.startsWith('#/')) {
-    const target = hash.substring(1);
-    return basePath ? `${basePath}${target}` : target;
-  }
-  return window.location.pathname;
-};
-
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Navigation & Pathname Physical Routing
-  const [currentPath, setCurrentPath] = useState(getInitialPath());
+  const [currentPath, setCurrentPath] = useState(location.pathname);
   const [view, setView] = useState<'landing' | 'marketplace' | 'admin' | 'payment-callback' | 'deployment-assets'>('landing');
   const [activeNavTab, setActiveNavTab] = useState('home');
+
+  // Synchronize currentPath state when react-router-dom location updates
+  useEffect(() => {
+    setCurrentPath(location.pathname);
+  }, [location.pathname]);
 
   // Determine path relative to GitHub Pages repository subfolder (basePath)
   let relativePath = currentPath;
@@ -66,7 +64,7 @@ export default function App() {
   const [showInactivityWarning, setShowInactivityWarning] = useState(false);
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
 
-  // Physical routing navigate helper
+  // Physical routing navigate helper using react-router-dom
   const navigateTo = (path: string) => {
     const isGitHubPages = typeof window !== 'undefined' && (
       window.location.hostname.includes('github.io')
@@ -79,29 +77,9 @@ export default function App() {
       const targetWithBase = (basePath && !path.startsWith(basePath)) 
         ? `${basePath}${path === '/' ? '/' : path}` 
         : path;
-      window.history.pushState(null, '', targetWithBase);
-      setCurrentPath(targetWithBase);
+      navigate(targetWithBase);
     }
   };
-
-  // Physical Router Path synchronizer
-  useEffect(() => {
-    const handleLocationChange = () => {
-      const hash = window.location.hash;
-      if (hash && hash.startsWith('#/')) {
-        const target = hash.substring(1);
-        setCurrentPath(basePath ? `${basePath}${target}` : target);
-      } else {
-        setCurrentPath(window.location.pathname);
-      }
-    };
-    window.addEventListener('popstate', handleLocationChange);
-    window.addEventListener('hashchange', handleLocationChange);
-    return () => {
-      window.removeEventListener('popstate', handleLocationChange);
-      window.removeEventListener('hashchange', handleLocationChange);
-    };
-  }, []);
 
   // Synchronize path transitions with traditional state switcher
   useEffect(() => {

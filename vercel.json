@@ -7,27 +7,7 @@
       "destination": "/api/index.ts"
     },
     {
-      "source": "/admin",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/admin/:path*",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/admin-login",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/payment/callback",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/marketplace",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/deployment-assets",
+      "source": "/((?!api).*)",
       "destination": "/index.html"
     }
   ]
