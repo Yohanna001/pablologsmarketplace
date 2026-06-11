@@ -352,6 +352,13 @@ app.post('/api/admin/create', authenticateToken, (req: Request, res: Response) =
 // --- FLUTTERWAVE SECURE PAYMENT INTEGRATIONS ---
 // ============================================
 
+app.get('/api/flutterwave/config', (req: Request, res: Response) => {
+  res.json({
+    publicKey: process.env.FLUTTERWAVE_PUBLIC_KEY || '',
+    subaccountId: process.env.FLUTTERWAVE_SUBACCOUNT_ID || ''
+  });
+});
+
 // 9. Initialize Flutterwave Payment Request
 app.post('/api/flutterwave/initialize-payment', async (req: Request, res: Response) => {
   try {
@@ -420,7 +427,19 @@ app.post('/api/flutterwave/initialize-payment', async (req: Request, res: Respon
       body: JSON.stringify(payload)
     });
 
-    const data: any = await fwResponse.json();
+    const responseText = await fwResponse.text();
+    let data: any;
+
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error('[API Flutterwave] Failed to parse Flutterwave response as JSON:', responseText);
+      res.status(502).json({
+        status: 'error',
+        message: `Flutterwave gateway returned non-JSON response (Status: ${fwResponse.status}). Body starts with: ${responseText.slice(0, 140)}`
+      });
+      return;
+    }
 
     if (!fwResponse.ok || data.status !== 'success') {
       console.error('[API Flutterwave] Handshake returned error state:', data);
