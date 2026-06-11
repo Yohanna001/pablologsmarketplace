@@ -69,8 +69,7 @@ export default function App() {
   // Physical routing navigate helper
   const navigateTo = (path: string) => {
     const isGitHubPages = typeof window !== 'undefined' && (
-      window.location.hostname.includes('github.io') || 
-      window.location.hostname.includes('vercel.app')
+      window.location.hostname.includes('github.io')
     );
 
     if (isGitHubPages) {
@@ -145,11 +144,7 @@ export default function App() {
       navigateTo('/deployment-assets');
     } else if (v === 'admin') {
       setActiveNavTab('admin');
-      if (adminSession) {
-        navigateTo('/admin/dashboard');
-      } else {
-        navigateTo('/admin-login');
-      }
+      navigateTo('/admin');
     }
   };
 
@@ -308,7 +303,7 @@ export default function App() {
     setAdminToken(token);
     setAdminSession(sessionData);
     localStorage.setItem('pm_admin_token', token);
-    navigateTo('/admin/dashboard');
+    navigateTo('/admin');
     triggerAlert(`Access Granted: Welcome back, Administrator ${sessionData.fullName}!`, 'success');
   };
 
@@ -317,7 +312,7 @@ export default function App() {
     setAdminSession(null);
     localStorage.removeItem('pm_admin_token');
     setShowInactivityWarning(false);
-    navigateTo('/admin-login');
+    navigateTo('/admin');
     triggerAlert('Session terminated successfully. Admin access revoked.', 'info');
   };
 
