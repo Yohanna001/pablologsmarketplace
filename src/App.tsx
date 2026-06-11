@@ -92,6 +92,50 @@ export default function App() {
     }
     if (rel === '') rel = '/';
 
+    // Parse URLSearchParams for cancel alerts and non-successful states
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status');
+    const cancelled = params.get('cancelled');
+    const paymentCancelledParam = params.get('payment_cancelled');
+    const isPaymentPath = rel.startsWith('/payment') || rel.includes('/callback');
+    const isSuccess = status === 'successful' || status === 'completed';
+
+    // If payment path is accessed but has a non-successful state, or cancellation parameter is present
+    if ((isPaymentPath && !isSuccess) || paymentCancelledParam === 'true') {
+      // 1. Immediately redirect to /marketplace
+      setView('marketplace');
+      setActiveNavTab('marketplace');
+      navigateTo('/marketplace');
+
+      // 2. Clear query string in browser address bar (so refreshing/back doesn't show alert again or loop)
+      if (typeof window !== 'undefined' && window.history.replaceState) {
+        const cleanUrl = window.location.origin + (basePath || '') + '/marketplace';
+        window.history.replaceState(null, '', cleanUrl);
+      }
+
+      // 3. Display the requested notification message exactly as specified
+      triggerAlert('Payment cancelled. You can continue browsing and make payment anytime.', 'info');
+      return;
+    }
+
+    // Direct any invalid routes to /marketplace to completely avoid 404 screens!
+    const isKnownRoute = 
+      rel === '/' || 
+      rel === '/index.html' || 
+      rel === '/marketplace' || 
+      rel === '/deployment' || 
+      rel === '/deployment-assets' || 
+      rel === '/admin-login' || 
+      rel.startsWith('/admin') || 
+      rel === '/payment/callback';
+
+    if (!isKnownRoute) {
+      setView('marketplace');
+      setActiveNavTab('marketplace');
+      navigateTo('/marketplace');
+      return;
+    }
+
     if (rel === '/' || rel === '/index.html') {
       setView('landing');
     } else if (rel === '/marketplace') {

@@ -192,7 +192,17 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
           amount: product.price,
           currency: 'NGN',
           payment_options: 'card,banktransfer,ussd',
-          redirect_url: redirectUrl,
+          callback: function (data: any) {
+            console.log('[Checkout] Inline Payment success callback received:', data);
+            const isSuccess = data.status === 'successful' || data.status === 'completed';
+            const redirectSuccessUrl = `${redirectUrl}?status=${isSuccess ? 'successful' : 'failed'}&tx_ref=${tx_ref}&transaction_id=${data.transaction_id || data.id || ''}`;
+            window.location.href = redirectSuccessUrl;
+          },
+          onclose: function () {
+            console.log('[Checkout] Inline Payment closed/cancelled by user');
+            const redirectCancelUrl = `${redirectUrl}?status=cancelled&tx_ref=${tx_ref}`;
+            window.location.href = redirectCancelUrl;
+          },
           customer: {
             email: buyerEmail.toLowerCase(),
             name: 'Verified Buyer'

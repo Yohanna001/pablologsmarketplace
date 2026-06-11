@@ -23,10 +23,13 @@ function PaymentCallbackContent() {
   const transactionId = searchParams.get('transaction_id');
 
   useEffect(() => {
-    // If status is immediately known as failed
+    // If status is immediately known as failed or cancelled
     if (status === 'failed' || status === 'cancelled') {
       setVerificationState('failed');
       setErrorDetails('The transaction was cancelled or declined at the gateway.');
+      setTimeout(() => {
+        window.location.href = '/marketplace?payment_cancelled=true';
+      }, 500);
       return;
     }
 

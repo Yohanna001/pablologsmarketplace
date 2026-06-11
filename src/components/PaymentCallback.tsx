@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2, ArrowLeft, ShieldCheck, ShoppingBag, Globe } from 'lucide-react';
 import { db } from '../data';
 import { decryptCredentials } from '../utils/crypto';
@@ -10,6 +11,7 @@ import { decryptCredentials } from '../utils/crypto';
  * Elegant SPA-compatible page displaying clear status feedback for simulated checkouts.
  */
 export default function PaymentCallback() {
+  const navigate = useNavigate();
   const [verificationState, setVerificationState] = useState<'verifying' | 'success' | 'failed'>('verifying');
   const [txRef, setTxRef] = useState<string>('');
   const [transactionId, setTransactionId] = useState<string>('');
@@ -174,11 +176,11 @@ export default function PaymentCallback() {
   }, []);
 
   const handleReturnHome = () => {
-    window.location.href = '/';
+    navigate('/');
   };
 
   const handleGoToMarket = () => {
-    window.location.href = '/marketplace';
+    navigate('/marketplace');
   };
 
   return (
