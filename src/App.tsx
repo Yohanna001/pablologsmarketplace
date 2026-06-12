@@ -95,9 +95,10 @@ export default function App() {
     // Parse URLSearchParams for cancel alerts and non-successful states
     const params = new URLSearchParams(window.location.search);
     const status = params.get('status');
+    const viewParam = params.get('view');
     const cancelled = params.get('cancelled');
     const paymentCancelledParam = params.get('payment_cancelled');
-    const isPaymentPath = rel.startsWith('/payment') || rel.includes('/callback');
+    const isPaymentPath = rel.startsWith('/payment') || rel.includes('/callback') || viewParam === 'payment-callback';
     const isSuccess = status === 'successful' || status === 'completed';
 
     // If payment path is accessed but has a non-successful state, or cancellation parameter is present
@@ -137,7 +138,11 @@ export default function App() {
     }
 
     if (rel === '/' || rel === '/index.html') {
-      setView('landing');
+      if (viewParam === 'payment-callback') {
+        setView('payment-callback');
+      } else {
+        setView('landing');
+      }
     } else if (rel === '/marketplace') {
       setView('marketplace');
       setActiveNavTab('marketplace');
@@ -147,7 +152,7 @@ export default function App() {
     } else if (rel.startsWith('/admin') || rel === '/admin-login') {
       setView('admin');
       setActiveNavTab('admin');
-    } else if (rel === '/payment/callback') {
+    } else if (rel === '/payment/callback' || viewParam === 'payment-callback') {
       setView('payment-callback');
     }
   }, [currentPath]);

@@ -9,6 +9,12 @@ import { adminDb } from './src/server/adminDb';
 // Load environment variables
 dotenv.config();
 
+// Sanitizer to clean environment variables (removing enclosing quotes, trailing characters, or whitespaces)
+const cleanValue = (val: string | undefined): string => {
+  if (!val) return '';
+  return val.trim().replace(/^["']|["']$/g, '').trim();
+};
+
 const app = express();
 const PORT = 3000;
 
@@ -352,10 +358,25 @@ app.post('/api/admin/create', authenticateToken, (req: Request, res: Response) =
 // --- FLUTTERWAVE SECURE PAYMENT INTEGRATIONS ---
 // ============================================
 
+// Intercept traditional callback path and cleanly HTTP 302 redirect to root SPA path.
+// This completely avoids sub-path asset loading bugs on refresh (e.g. ./assets/index.js returning 404).
+app.get('/payment/callback', (req: Request, res: Response) => {
+  const queryIndex = req.url.indexOf('?');
+  const queryString = queryIndex !== -1 ? req.url.substring(queryIndex + 1) : '';
+  
+  console.log(`[API Redirect] Intercepted payment callback sub-path. Performing HTTP 302 redirect to root SPA with query: ${queryString}`);
+  
+  if (queryString) {
+    res.redirect(`/?view=payment-callback&${queryString}`);
+  } else {
+    res.redirect(`/?view=payment-callback`);
+  }
+});
+
 app.get('/api/flutterwave/config', (req: Request, res: Response) => {
   res.json({
-    publicKey: process.env.FLUTTERWAVE_PUBLIC_KEY || '',
-    subaccountId: process.env.FLUTTERWAVE_SUBACCOUNT_ID || ''
+    publicKey: cleanValue(process.env.FLUTTERWAVE_PUBLIC_KEY),
+    subaccountId: cleanValue(process.env.FLUTTERWAVE_SUBACCOUNT_ID)
   });
 });
 
@@ -369,9 +390,9 @@ app.post('/api/flutterwave/initialize-payment', async (req: Request, res: Respon
       return;
     }
 
-    const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
-    const publicKey = process.env.FLUTTERWAVE_PUBLIC_KEY;
-    const subaccountId = process.env.FLUTTERWAVE_SUBACCOUNT_ID;
+    const secretKey = cleanValue(process.env.FLUTTERWAVE_SECRET_KEY);
+    const publicKey = cleanValue(process.env.FLUTTERWAVE_PUBLIC_KEY);
+    const subaccountId = cleanValue(process.env.FLUTTERWAVE_SUBACCOUNT_ID);
     
     // Determine the redirect base domain dynamically from incoming headers to support any domain automatically
     const host = req.headers.host || 'localhost:3000';
@@ -467,7 +488,7 @@ app.post('/api/flutterwave/initialize-payment', async (req: Request, res: Respon
 app.post('/api/flutterwave/webhook', async (req: Request, res: Response) => {
   try {
     const signature = req.headers['verif-hash'];
-    const webhookSecret = process.env.FLUTTERWAVE_WEBHOOK_SECRET;
+    const webhookSecret = cleanValue(process.env.FLUTTERWAVE_WEBHOOK_SECRET);
 
     console.log(`[API Webhook] Flutterwave trigger received. Event header signature: ${signature}`);
 
@@ -504,7 +525,7 @@ app.post('/api/flutterwave/webhook', async (req: Request, res: Response) => {
       return;
     }
 
-    const secretKey = process.env.FLUTTERWAVE_SECRET_KEY;
+    const secretKey = cleanValue(process.env.FLUTTERWAVE_SECRET_KEY);
     if (!secretKey) {
       console.error('[API Webhook] Unable to cross-verify transaction. secret key setting is blank.');
       res.status(500).json({ status: 'error', message: 'Server-side secret key check missing' });

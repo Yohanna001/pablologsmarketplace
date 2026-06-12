@@ -155,17 +155,26 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         publicKey = ((import.meta as any).env?.VITE_FLUTTERWAVE_PUBLIC_KEY as string) || '';
       }
 
+      // Clean the key (un-wrap enclosing quotes or spaces that some secret managers insert)
+      const cleanKey = (val: string): string => {
+        if (!val) return '';
+        return val.trim().replace(/^["']|["']$/g, '').trim();
+      };
+      
+      const cleanedPublicKey = cleanKey(publicKey);
+
       const host = window.location.host;
       const protocol = window.location.protocol;
       const baseUrl = `${protocol}//${host}`;
       const redirectUrl = `${baseUrl}/payment/callback`;
 
-      const hasRealKey = publicKey && publicKey.trim() !== '' && !publicKey.includes('...');
+      // Check if it's a real, validly-formatted public key starting with FLWPUBK
+      const hasRealKey = cleanedPublicKey && cleanedPublicKey.trim() !== '' && !cleanedPublicKey.includes('...') && cleanedPublicKey.startsWith('FLWPUBK');
       const flutterwaveObj = (window as any).FlutterwaveCheckout;
 
       // 1. Direct Inline Browser Integration (Immune to GCP proxy server blocks, 100% real checkout in browser)
       if (flutterwaveObj && hasRealKey) {
-        console.log('[Checkout] Direct Inline Checkout initiated with Public Key:', publicKey);
+        console.log('[Checkout] Direct Inline Checkout initiated with Public Key:', cleanedPublicKey);
         
         // Register pending order record to provide flawless tracking & secure callback lookup
         const newOrder: Order = {
@@ -187,7 +196,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         setIsInitializing(false);
 
         flutterwaveObj({
-          public_key: publicKey,
+          public_key: cleanedPublicKey,
           tx_ref: tx_ref,
           amount: product.price,
           currency: 'NGN',
