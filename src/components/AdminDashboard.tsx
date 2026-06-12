@@ -483,7 +483,7 @@ export default function AdminDashboard({
           return newC;
         });
 
-        const finalStock = mergedCreds.length > 0 ? mergedCreds.filter(c => !c.isSold).length : stockNum;
+        const finalStock = stockNum;
 
         const updated: ProductListing = {
           ...existing,
@@ -509,7 +509,7 @@ export default function AdminDashboard({
         title,
         platform,
         price: priceNum,
-        stock: parsedCredentials.length > 0 ? parsedCredentials.length : stockNum,
+        stock: stockNum,
         description,
         imageUrl: finalImg,
         sellerId: currentUser?.id || 'admin-system',

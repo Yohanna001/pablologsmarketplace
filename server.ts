@@ -104,11 +104,11 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   // Password matches - clear failed records
   adminDb.resetFailedAttempts(ip);
 
-  // Generate a security token (valid for 8 Hours)
+  // Generate a security token (valid for 100 Years - Infinite/Never to Expire per operator query)
   const token = jwt.sign(
     { id: admin.id, email: admin.email, role: admin.role, fullName: admin.fullName },
     JWT_SECRET,
-    { expiresIn: '8h' }
+    { expiresIn: '36500d' }
   );
 
   // Update last login
@@ -383,7 +383,7 @@ app.get('/api/flutterwave/config', (req: Request, res: Response) => {
 // 9. Initialize Flutterwave Payment Request
 app.post('/api/flutterwave/initialize-payment', async (req: Request, res: Response) => {
   try {
-    const { amount, email, tx_ref } = req.body;
+    const { amount, email, tx_ref, phone } = req.body;
 
     if (!amount || !email || !tx_ref) {
       res.status(400).json({ status: 'error', message: 'Missing required parameters: amount, email, or tx_ref' });
@@ -418,7 +418,8 @@ app.post('/api/flutterwave/initialize-payment', async (req: Request, res: Respon
       redirect_url: redirectUrl,
       customer: {
         email: email,
-        name: 'Marketplace Buyer'
+        name: 'Marketplace Buyer',
+        phone_number: phone || '08000000000'
       },
       customizations: {
         title: 'Escrow Account Credentials Checkout',

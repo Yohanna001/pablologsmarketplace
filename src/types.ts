@@ -70,6 +70,7 @@ export interface Order {
   id: string;
   buyerEmail: string;
   buyerName: string;
+  buyerPhone?: string;
   productId: string;
   productTitle: string;
   productPlatform: string;

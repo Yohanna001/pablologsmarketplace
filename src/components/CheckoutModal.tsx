@@ -14,6 +14,7 @@ interface CheckoutModalProps {
 export default function CheckoutModal({ product, currentUser, onClose, onPaymentSuccess }: CheckoutModalProps) {
   // Direct Inputs
   const [buyerEmail, setBuyerEmail] = useState(currentUser?.email || '');
+  const [buyerPhone, setBuyerPhone] = useState('+2348000000000');
 
   // View States
   const [step, setStep] = useState<'checkout' | 'processing' | 'success'>('checkout');
@@ -125,6 +126,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         id: `order-${Date.now()}`,
         buyerEmail: buyerEmail.toLowerCase(),
         buyerName: currentUser?.name || 'Verified Buyer',
+        buyerPhone: buyerPhone || '+2348000000000',
         productId: product.id,
         productTitle: product.title,
         productPlatform: product.platform,
@@ -204,6 +206,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
           id: tx_ref,
           buyerEmail: buyerEmail.toLowerCase(),
           buyerName: currentUser?.name || 'Verified Buyer',
+          buyerPhone: buyerPhone || '+2348000000000',
           productId: product.id,
           productTitle: product.title,
           productPlatform: product.platform,
@@ -237,7 +240,8 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
           },
           customer: {
             email: buyerEmail.toLowerCase(),
-            name: 'Verified Buyer'
+            name: 'Verified Buyer',
+            phone_number: buyerPhone || '08000000000'
           },
           customizations: {
             title: 'Escrow Account Credentials Checkout',
@@ -258,7 +262,8 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         body: JSON.stringify({
           amount: product.price,
           email: buyerEmail.toLowerCase(),
-          tx_ref
+          tx_ref,
+          phone: buyerPhone || '08000000000'
         })
       });
 
@@ -281,6 +286,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         id: tx_ref,
         buyerEmail: buyerEmail.toLowerCase(),
         buyerName: currentUser?.name || 'Verified Buyer',
+        buyerPhone: buyerPhone || '+2348000000000',
         productId: product.id,
         productTitle: product.title,
         productPlatform: product.platform,
@@ -402,72 +408,6 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
                 </p>
               </div>
 
-              {/* Gateway Diagnostics Details panel */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-extrabold text-[#1A1A2E] uppercase tracking-wider flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-teal-600" /> Gateway Key Handshake Diagnosis
-                  </span>
-                  <span className="text-[9px] bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded font-bold border border-sky-150">
-                    Settings Audit
-                  </span>
-                </div>
-
-                <div className="text-[11px] space-y-1.5 text-slate-700 leading-none">
-                  <div className="flex justify-between">
-                    <span>Gateway Public Key Status:</span>
-                    {configStatus.publicKeyLoaded ? (
-                      configStatus.isSecretSwapped ? (
-                        <span className="text-rose-600 font-bold">⚠️ Secret Key Mismatch</span>
-                      ) : configStatus.isPlaceholder ? (
-                        <span className="text-amber-600 font-bold">⚠️ Default Placeholder</span>
-                      ) : (
-                        <span className="text-emerald-600 font-bold">✓ Loaded Ready</span>
-                      )
-                    ) : (
-                      <span className="text-rose-600 font-bold font-mono">Missing Keys</span>
-                    )}
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span>Loaded Key Prefix:</span>
-                    <span className="font-mono text-[10px] text-[#1A1A2E] bg-slate-200 px-1 rounded">
-                      {configStatus.publicKeyLoaded 
-                        ? configStatus.publicKeyVal.substring(0, 15) + '...'
-                        : 'None'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span>Key Format Mode:</span>
-                    {configStatus.publicKeyVal.startsWith('FLWPUBK_TEST') ? (
-                      <span className="text-blue-600 font-bold font-sans">Sandbox (TEST)</span>
-                    ) : configStatus.publicKeyVal.startsWith('FLWPUBK-') ? (
-                      <span className="text-indigo-600 font-bold font-sans">Production (LIVE)</span>
-                    ) : (
-                      <span className="text-slate-500 font-mono">Unknown Prefix</span>
-                    )}
-                  </div>
-                </div>
-
-                {configStatus.isSecretSwapped && (
-                  <div className="p-2 bg-rose-50 text-rose-800 rounded border border-rose-200 text-[10px] leading-relaxed">
-                    <b>Critical Error:</b> A Secret Key (starting with FLWSECK) has been incorrectly loaded into the FLUTTERWAVE_PUBLIC_KEY field. Please change it to your <b>Public Key (starting with FLWPUBK)</b> in your settings to avoid gateway authorization crashes.
-                  </div>
-                )}
-
-                {configStatus.keyFormatError && (
-                  <div className="p-2 bg-amber-50 text-amber-800 rounded border border-amber-200 text-[10px] leading-relaxed">
-                    <b>Notice:</b> {configStatus.keyFormatError}. Keys usually follow standard structures like <code>FLWPUBK_TEST-...</code> or <code>FLWPUBK-...</code>. Please verify you didn't introduce trailing spaces or typos.
-                  </div>
-                )}
-
-                {!configStatus.isSecretSwapped && !configStatus.isPlaceholder && configStatus.publicKeyVal.startsWith('FLWPUBK-') && (
-                  <div className="p-2.5 bg-blue-50 text-blue-900 rounded-lg border border-blue-150 text-[10px] leading-relaxed">
-                    💡 <b>Production Environment Note:</b> You are attempting to run a checkout using a live production public key. Ensure that your merchant profile is fully validated/active on the Flutterwave dashboard, as unverified accounts or local test calls using live keys will return <code>"Invalid public key passed"</code>. For test payments, please use test credentials (starting with <code>FLWPUBK_TEST-</code>).
-                  </div>
-                )}
-              </div>
 
               <div className="pt-2">
                 <button

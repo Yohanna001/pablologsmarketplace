@@ -286,7 +286,7 @@ export default function App() {
     }
   }, [adminToken]);
 
-  // Inactivity tracking protocol (30m timeout, warning at 25m)
+  // Inactivity tracking protocol (Configured as infinite/never to expire per operator instruction)
   useEffect(() => {
     if (!adminSession) {
       setShowInactivityWarning(false);
@@ -302,19 +302,10 @@ export default function App() {
     window.addEventListener('scroll', updateActivity);
     window.addEventListener('click', updateActivity);
 
-    // Track state every 10 seconds
+    // Track state (Bypassed so session remains infinite and never expires)
     const checkInterval = setInterval(() => {
-      const inactiveMs = Date.now() - lastActivity;
-      const inactiveMinutes = inactiveMs / 1000 / 60;
-
-      if (inactiveMinutes >= 30) {
-        handleAdminLogout();
-        triggerAlert('Security Session Expired: Signed out automatically after 30 minutes of inactivity.', 'error');
-      } else if (inactiveMinutes >= 25) {
-        setShowInactivityWarning(true);
-      } else {
-        setShowInactivityWarning(false);
-      }
+      // Inactivity timeout auto-logout disabled to maintain permanent, infinite active workspace sessions
+      setShowInactivityWarning(false);
     }, 10000);
 
     return () => {
