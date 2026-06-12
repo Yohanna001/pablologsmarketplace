@@ -14,17 +14,12 @@ interface CheckoutModalProps {
 export default function CheckoutModal({ product, currentUser, onClose, onPaymentSuccess }: CheckoutModalProps) {
   // Direct Inputs
   const [buyerEmail, setBuyerEmail] = useState(currentUser?.email || '');
-  const [cardName, setCardName] = useState(currentUser?.name || '');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
 
   // View States
   const [step, setStep] = useState<'checkout' | 'processing' | 'success'>('checkout');
   const [errorMsg, setErrorMsg] = useState('');
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'simulation' | 'flutterwave'>('simulation');
   const [configStatus, setConfigStatus] = useState<{
     publicKeyLoaded: boolean;
     publicKeyVal: string;
@@ -72,29 +67,6 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
     checkConfig();
   }, []);
 
-  // Auto layout spacing for direct card entries
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, '');
-    if (val.length > 16) val = val.substring(0, 16);
-    const formatted = val.match(/.{1,4}/g)?.join(' ') || val;
-    setCardNumber(formatted);
-  };
-
-  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, '');
-    if (val.length > 4) val = val.substring(0, 4);
-    if (val.length >= 2) {
-      val = val.substring(0, 2) + '/' + val.substring(2);
-    }
-    setCardExpiry(val);
-  };
-
-  const handleCvcChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '');
-    if (val.length <= 3) {
-      setCardCvc(val);
-    }
-  };
 
   // Callback to finalize database and credentials decrypt upon payment verification
   const handleCompleteEscrowPayment = (txRef: string) => {
@@ -152,7 +124,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       const newOrder: Order = {
         id: `order-${Date.now()}`,
         buyerEmail: buyerEmail.toLowerCase(),
-        buyerName: cardName || 'Sarah Customer',
+        buyerName: currentUser?.name || 'Verified Buyer',
         productId: product.id,
         productTitle: product.title,
         productPlatform: product.platform,
@@ -231,7 +203,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         const newOrder: Order = {
           id: tx_ref,
           buyerEmail: buyerEmail.toLowerCase(),
-          buyerName: cardName || 'Verified Buyer',
+          buyerName: currentUser?.name || 'Verified Buyer',
           productId: product.id,
           productTitle: product.title,
           productPlatform: product.platform,
@@ -308,7 +280,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       const newOrder: Order = {
         id: tx_ref,
         buyerEmail: buyerEmail.toLowerCase(),
-        buyerName: cardName || 'Verified Buyer',
+        buyerName: currentUser?.name || 'Verified Buyer',
         productId: product.id,
         productTitle: product.title,
         productPlatform: product.platform,
@@ -335,36 +307,6 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         handleCompleteEscrowPayment(`tx-sandbox-backup-${Date.now()}`);
       }, 3500);
     }
-  };
-
-  // Inline simulation pay submit handler
-  const handleSimulatedPaySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-
-    if (!buyerEmail || !buyerEmail.includes('@')) {
-      setErrorMsg('Please specify a valid delivery email.');
-      return;
-    }
-    if (!cardName) {
-      setErrorMsg('Please enter cardholder name.');
-      return;
-    }
-    if (cardNumber.replace(/\s/g, '').length < 16) {
-      setErrorMsg('Please specify full 16-digit card numbers.');
-      return;
-    }
-    if (cardExpiry.length < 5) {
-      setErrorMsg('Please enterMM/YY expiration.');
-      return;
-    }
-    if (cardCvc.length < 3) {
-      setErrorMsg('Please enter cvv digits.');
-      return;
-    }
-
-    setStep('processing');
-    handleCompleteEscrowPayment(`tx-sim-${Date.now()}`);
   };
 
   return (
@@ -436,264 +378,128 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
               </div>
             </div>
 
-            {/* Payment Method Selector */}
-            <div className="flex border border-slate-200 rounded-xl p-1 bg-slate-50 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('simulation')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  paymentMethod === 'simulation'
-                    ? 'bg-[#0F3460] text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-150'
-                }`}
-              >
-                <CreditCard className="w-4 h-4" />
-                <span>Sandbox Card (Instant Pay)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('flutterwave')}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  paymentMethod === 'flutterwave'
-                    ? 'bg-[#0F3460] text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-150'
-                }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span>Flutterwave Gateway</span>
-              </button>
-            </div>
-
-            {paymentMethod === 'simulation' ? (
-              /* Option A: Sandbox Simulation Credit Card Checkout Form */
-              <form onSubmit={handleSimulatedPaySubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#1A1A2E] mb-1.5 uppercase tracking-wider">
-                    Recipient Delivery Email
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-450 pointer-events-none">
-                      <Mail className="w-4 h-4" />
-                    </span>
-                    <input
-                      type="email"
-                      required
-                      value={buyerEmail}
-                      onChange={(e) => setBuyerEmail(e.target.value)}
-                      placeholder="Enter email to deliver credentials"
-                      className="w-full text-xs pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F3460] font-medium"
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-1 lines-2 leading-tight">
-                    Credential access codes will appear instantly on screen and be sent to this email upon payment authorization.
-                  </p>
+            {/* Official Flutterwave Checkout Integration */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#1A1A2E] mb-2 uppercase tracking-wider">
+                  Recipient Delivery Email Address
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
+                    <Mail className="w-4.5 h-4.5" />
+                  </span>
+                  <input
+                    type="email"
+                    required
+                    value={buyerEmail}
+                    onChange={(e) => setBuyerEmail(e.target.value)}
+                    placeholder="Enter email to deliver credentials"
+                    className="w-full text-sm pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F3460] min-h-[46px]"
+                  />
                 </div>
-
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[#1A1A2E] flex items-center gap-1.5">
-                      <CreditCard className="w-4 h-4 text-slate-500" /> Enter Card Details
-                    </span>
-                    <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-250 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                      Sandbox Safe
-                    </span>
-                  </div>
-
-                  <div>
-                    <label className="block text-[9px] font-bold text-[#4A4A6A] mb-1 uppercase tracking-wider">
-                      Cardholder Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={cardName}
-                      onChange={(e) => setCardName(e.target.value)}
-                      placeholder="e.g. Sarah Customer"
-                      className="w-full text-xs px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F3460]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[9px] font-bold text-[#4A4A6A] mb-1 uppercase tracking-wider">
-                      Card Number
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={cardNumber}
-                      onChange={handleCardNumberChange}
-                      placeholder="4000 1234 5678 9010"
-                      className="w-full text-xs px-3 py-2 bg-white border border-slate-200 text-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F3460]"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-35">
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#4A4A6A] mb-1 uppercase tracking-wider">
-                        Expiry Date
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={cardExpiry}
-                        onChange={handleExpiryChange}
-                        placeholder="MM/YY"
-                        className="w-full text-xs px-3 py-2 bg-white border border-slate-200 text-slate-850 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F3460] text-center"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#4A4A6A] mb-1 uppercase tracking-wider">
-                        CVV / CVC
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        value={cardCvc}
-                        onChange={handleCvcChange}
-                        placeholder="•••"
-                        maxLength={3}
-                        className="w-full text-xs px-3 py-2 bg-white border border-slate-200 text-slate-850 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0F3460] text-center"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-1.5Fixed">
-                  <button
-                    type="submit"
-                    className="w-full py-3.5 bg-[#E94560] hover:bg-[#D83A52] text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99]"
-                  >
-                    <Lock className="w-4 h-4 text-white" />
-                    <span>Pay ₦{product.price.toLocaleString()} via Secured Escrow (Sandbox Mode)</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-center gap-1.5 text-[9px] text-slate-550 pt-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Secured 256-bit SSL Escrow Gateway Handshake</span>
-                </div>
-              </form>
-            ) : (
-              /* Option B: Official Flutterwave Integration launcher */
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#1A1A2E] mb-2 uppercase tracking-wider">
-                    Recipient Delivery Email
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
-                      <Mail className="w-4.5 h-4.5" />
-                    </span>
-                    <input
-                      type="email"
-                      required
-                      value={buyerEmail}
-                      onChange={(e) => setBuyerEmail(e.target.value)}
-                      placeholder="Enter email to deliver credentials"
-                      className="w-full text-sm pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0F3460] min-h-[46px]"
-                    />
-                  </div>
-                </div>
-
-                {/* Gateway Diagnostics Details panel */}
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold text-[#1A1A2E] uppercase tracking-wider flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5 text-teal-600" /> Gateway Key Handshake Diagnosis
-                    </span>
-                    <span className="text-[9px] bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded font-bold border border-sky-150">
-                      Settings Audit
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] space-y-1.5 text-slate-700 leading-none">
-                    <div className="flex justify-between">
-                      <span>Gateway Public Key Status:</span>
-                      {configStatus.publicKeyLoaded ? (
-                        configStatus.isSecretSwapped ? (
-                          <span className="text-rose-600 font-bold">⚠️ Secret Key Mismatch</span>
-                        ) : configStatus.isPlaceholder ? (
-                          <span className="text-amber-600 font-bold">⚠️ Default Placeholder</span>
-                        ) : (
-                          <span className="text-emerald-600 font-bold">✓ Loaded Ready</span>
-                        )
-                      ) : (
-                        <span className="text-rose-600 font-bold font-mono">Missing Keys</span>
-                      )}
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span>Loaded Key Prefix:</span>
-                      <span className="font-mono text-[10px] text-[#1A1A2E] bg-slate-200 px-1 rounded">
-                        {configStatus.publicKeyLoaded 
-                          ? configStatus.publicKeyVal.substring(0, 15) + '...'
-                          : 'None'}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span>Key Format Mode:</span>
-                      {configStatus.publicKeyVal.startsWith('FLWPUBK_TEST') ? (
-                        <span className="text-blue-600 font-bold font-sans">Sandbox (TEST)</span>
-                      ) : configStatus.publicKeyVal.startsWith('FLWPUBK-') ? (
-                        <span className="text-indigo-600 font-bold font-sans">Production (LIVE)</span>
-                      ) : (
-                        <span className="text-slate-500 font-mono">Unknown Prefix</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {configStatus.isSecretSwapped && (
-                    <div className="p-2 bg-rose-50 text-rose-800 rounded border border-rose-200 text-[10px] leading-relaxed">
-                      <b>Critical Error:</b> A Secret Key (starting with FLWSECK) has been incorrectly loaded into the FLUTTERWAVE_PUBLIC_KEY field. Please change it to your <b>Public Key (starting with FLWPUBK)</b> in your settings to avoid gateway authorization crashes.
-                    </div>
-                  )}
-
-                  {configStatus.keyFormatError && (
-                    <div className="p-2 bg-amber-50 text-amber-800 rounded border border-amber-200 text-[10px] leading-relaxed">
-                      <b>Notice:</b> {configStatus.keyFormatError}. Keys usually follow standard structures like <code>FLWPUBK_TEST-...</code> or <code>FLWPUBK-...</code>. Please verify you didn't introduce trailing spaces or typos.
-                    </div>
-                  )}
-
-                  {!configStatus.isSecretSwapped && !configStatus.isPlaceholder && configStatus.publicKeyVal.startsWith('FLWPUBK-') && (
-                    <div className="p-2.5 bg-blue-50 text-blue-900 rounded-lg border border-blue-150 text-[10px] leading-relaxed">
-                      💡 <b>Production Environment Note:</b> You are attempting to run a checkout using a live production public key. Ensure that your merchant profile is fully validated/active on the Flutterwave dashboard, as unverified accounts or local test calls using live keys will return <code>"Invalid public key passed"</code>. For test payments, please use test credentials (starting with <code>FLWPUBK_TEST-</code>).
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    id="fw-checkout-trigger-btn"
-                    onClick={handlePayViaFlutterwave}
-                    disabled={isInitializing || configStatus.isSecretSwapped}
-                    className={`w-full py-3.5 text-white font-extrabold text-sm rounded-xl transition-all duration-200 active:scale-[0.99] flex items-center justify-center gap-2.5 shadow-md cursor-pointer ${
-                      isInitializing || configStatus.isSecretSwapped
-                        ? 'bg-slate-400 cursor-not-allowed'
-                        : 'bg-[#E94560] hover:bg-[#D83A52]'
-                    }`}
-                  >
-                    {isInitializing ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                        Redirecting to Flutterwave...
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="w-4 h-4 text-white" />
-                        Pay ₦{product.price.toLocaleString()} via Flutterwave Checkout
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="pt-2 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Secured 256-bit SSL Escrow Gateway Handshake</span>
-                </div>
+                <p className="text-[10px] text-slate-500 mt-1.5 leading-normal">
+                  Your purchase credentials and account coordinate access codes will appear instantly on screen and be sent to this email upon payment authorization.
+                </p>
               </div>
-            )}
+
+              {/* Gateway Diagnostics Details panel */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-[#1A1A2E] uppercase tracking-wider flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-teal-600" /> Gateway Key Handshake Diagnosis
+                  </span>
+                  <span className="text-[9px] bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded font-bold border border-sky-150">
+                    Settings Audit
+                  </span>
+                </div>
+
+                <div className="text-[11px] space-y-1.5 text-slate-700 leading-none">
+                  <div className="flex justify-between">
+                    <span>Gateway Public Key Status:</span>
+                    {configStatus.publicKeyLoaded ? (
+                      configStatus.isSecretSwapped ? (
+                        <span className="text-rose-600 font-bold">⚠️ Secret Key Mismatch</span>
+                      ) : configStatus.isPlaceholder ? (
+                        <span className="text-amber-600 font-bold">⚠️ Default Placeholder</span>
+                      ) : (
+                        <span className="text-emerald-600 font-bold">✓ Loaded Ready</span>
+                      )
+                    ) : (
+                      <span className="text-rose-600 font-bold font-mono">Missing Keys</span>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span>Loaded Key Prefix:</span>
+                    <span className="font-mono text-[10px] text-[#1A1A2E] bg-slate-200 px-1 rounded">
+                      {configStatus.publicKeyLoaded 
+                        ? configStatus.publicKeyVal.substring(0, 15) + '...'
+                        : 'None'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span>Key Format Mode:</span>
+                    {configStatus.publicKeyVal.startsWith('FLWPUBK_TEST') ? (
+                      <span className="text-blue-600 font-bold font-sans">Sandbox (TEST)</span>
+                    ) : configStatus.publicKeyVal.startsWith('FLWPUBK-') ? (
+                      <span className="text-indigo-600 font-bold font-sans">Production (LIVE)</span>
+                    ) : (
+                      <span className="text-slate-500 font-mono">Unknown Prefix</span>
+                    )}
+                  </div>
+                </div>
+
+                {configStatus.isSecretSwapped && (
+                  <div className="p-2 bg-rose-50 text-rose-800 rounded border border-rose-200 text-[10px] leading-relaxed">
+                    <b>Critical Error:</b> A Secret Key (starting with FLWSECK) has been incorrectly loaded into the FLUTTERWAVE_PUBLIC_KEY field. Please change it to your <b>Public Key (starting with FLWPUBK)</b> in your settings to avoid gateway authorization crashes.
+                  </div>
+                )}
+
+                {configStatus.keyFormatError && (
+                  <div className="p-2 bg-amber-50 text-amber-800 rounded border border-amber-200 text-[10px] leading-relaxed">
+                    <b>Notice:</b> {configStatus.keyFormatError}. Keys usually follow standard structures like <code>FLWPUBK_TEST-...</code> or <code>FLWPUBK-...</code>. Please verify you didn't introduce trailing spaces or typos.
+                  </div>
+                )}
+
+                {!configStatus.isSecretSwapped && !configStatus.isPlaceholder && configStatus.publicKeyVal.startsWith('FLWPUBK-') && (
+                  <div className="p-2.5 bg-blue-50 text-blue-900 rounded-lg border border-blue-150 text-[10px] leading-relaxed">
+                    💡 <b>Production Environment Note:</b> You are attempting to run a checkout using a live production public key. Ensure that your merchant profile is fully validated/active on the Flutterwave dashboard, as unverified accounts or local test calls using live keys will return <code>"Invalid public key passed"</code>. For test payments, please use test credentials (starting with <code>FLWPUBK_TEST-</code>).
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  id="fw-checkout-trigger-btn"
+                  onClick={handlePayViaFlutterwave}
+                  disabled={isInitializing || configStatus.isSecretSwapped}
+                  className={`w-full py-3.5 text-white font-extrabold text-sm rounded-xl transition-all duration-200 active:scale-[0.99] flex items-center justify-center gap-2.5 shadow-md cursor-pointer ${
+                    isInitializing || configStatus.isSecretSwapped
+                      ? 'bg-slate-400 cursor-not-allowed'
+                      : 'bg-[#E94560] hover:bg-[#D83A52]'
+                  }`}
+                >
+                  {isInitializing ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      Redirecting to Flutterwave...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-4 h-4 text-white" />
+                      Pay ₦{product.price.toLocaleString()} via Flutterwave Checkout
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="pt-2 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Secured 256-bit SSL Escrow Gateway Handshake</span>
+              </div>
+            </div>
 
           </div>
         )}

@@ -210,6 +210,33 @@ function mapOrderToDb(order: Order) {
   };
 }
 
+// Helper to dynamically strip unrecognized columns from payload when table has divergent schema (PGRST204)
+async function resilientUpsert(tableName: string, payload: any): Promise<{ error: any }> {
+  if (!supabase) return { error: new Error('Supabase is not initialized') };
+  const currentPayload = { ...payload };
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    const { error } = await supabase.from(tableName).upsert(currentPayload);
+    if (!error) {
+      return { error: null };
+    }
+    
+    const errMsg = error.message || '';
+    const match = errMsg.match(/Could not find the '([^']+)' column/);
+    if (match && match[1]) {
+      const offendingColumn = match[1];
+      console.warn(`[Supabase Auto-Heal] Auto-stripped missing column "${offendingColumn}" from table "${tableName}"`);
+      delete currentPayload[offendingColumn];
+      attempts++;
+    } else {
+      return { error };
+    }
+  }
+  return { error: new Error(`Failed to save to "${tableName}" after removing unrecognized columns.`) };
+}
+
 // Supabase synchronization methods
 export const supabaseDb = {
   async getProducts(): Promise<ProductListing[] | null> {
@@ -241,7 +268,7 @@ export const supabaseDb = {
     if (!supabase) return false;
     try {
       const dbRow = mapProductToDb(product);
-      const { error } = await supabase.from('products').upsert(dbRow);
+      const { error } = await resilientUpsert('products', dbRow);
       if (error) {
         console.error('Error saving product to Supabase:', error);
         if (typeof window !== 'undefined') {
@@ -317,7 +344,7 @@ export const supabaseDb = {
     if (!supabase) return false;
     try {
       const dbRow = mapUserToDb(user);
-      const { error } = await supabase.from('users').upsert(dbRow);
+      const { error } = await resilientUpsert('users', dbRow);
       if (error) {
         console.error('Error saving user to Supabase:', error);
         if (typeof window !== 'undefined') {
@@ -368,7 +395,7 @@ export const supabaseDb = {
     if (!supabase) return false;
     try {
       const dbRow = mapOrderToDb(order);
-      const { error } = await supabase.from('orders').upsert(dbRow);
+      const { error } = await resilientUpsert('orders', dbRow);
       if (error) {
         console.error('Error saving order to Supabase:', error);
         if (typeof window !== 'undefined') {
