@@ -36,32 +36,38 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
 
   React.useEffect(() => {
     const checkConfig = async () => {
+      let rawKey = '';
       try {
         const configRes = await fetch('/api/paystack/config');
         if (configRes.ok) {
           const configData = await configRes.json();
-          const rawKey = configData.publicKey || '';
-          const cleaned = rawKey.trim().replace(/^["']|["']$/g, '').trim();
-          
-          const isSecret = cleaned.startsWith('sk_') || cleaned.startsWith('PAYSTACK_SECRET');
-          const isPlace = cleaned.includes('...') || cleaned === '';
-          
-          let formatErr = undefined;
-          if (cleaned && !cleaned.startsWith('pk_')) {
-            formatErr = 'Public Key must start with "pk_test_" (Test Mode) or "pk_live_" (Live Mode)';
-          }
-
-          setConfigStatus({
-            publicKeyLoaded: !!cleaned,
-            publicKeyVal: cleaned,
-            keyFormatError: formatErr,
-            isSecretSwapped: isSecret,
-            isPlaceholder: isPlace
-          });
+          rawKey = configData.publicKey || '';
         }
       } catch (err) {
         console.warn('[Diagnostics] Fetching Paystack key state failed on frontend:', err);
       }
+
+      // If we couldn't get it from the backend API, look in process.env / env fallback
+      if (!rawKey) {
+        rawKey = ((import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY as string) || (process.env.PAYSTACK_PUBLIC_KEY as string) || '';
+      }
+
+      const cleaned = rawKey.trim().replace(/^["']|["']$/g, '').trim();
+      const isSecret = cleaned.startsWith('sk_') || cleaned.startsWith('PAYSTACK_SECRET');
+      const isPlace = cleaned.includes('...') || cleaned === '';
+      
+      let formatErr = undefined;
+      if (cleaned && !cleaned.startsWith('pk_')) {
+        formatErr = 'Public Key must start with "pk_test_" (Test Mode) or "pk_live_" (Live Mode)';
+      }
+
+      setConfigStatus({
+        publicKeyLoaded: !!cleaned,
+        publicKeyVal: cleaned,
+        keyFormatError: formatErr,
+        isSecretSwapped: isSecret,
+        isPlaceholder: isPlace
+      });
     };
     checkConfig();
   }, []);
@@ -170,7 +176,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       }
 
       if (!publicKey) {
-        publicKey = ((import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY as string) || '';
+        publicKey = ((import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY as string) || (process.env.PAYSTACK_PUBLIC_KEY as string) || '';
       }
 
       // Clean the key (un-wrap enclosing quotes or spaces that some secret managers insert)
@@ -188,7 +194,12 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       const host = window.location.host;
       const protocol = window.location.protocol;
       const baseUrl = `${protocol}//${host}`;
-      const redirectUrl = `${baseUrl}/api/paystack/callback`;
+      
+      // Determine if a real API backend is available (offline/Vercel handles client verification)
+      const isBackendActive = configStatus.publicKeyLoaded && !configStatus.isPlaceholder && !window.location.hostname.includes('vercel.app');
+      const redirectUrl = isBackendActive
+        ? `${baseUrl}/api/paystack/callback`
+        : `${baseUrl}/?view=payment-callback&status=successful`;
 
       // Check if it's a real, validly-formatted public key starting with pk_
       const hasRealKey = cleanedPublicKey && cleanedPublicKey.trim() !== '' && !cleanedPublicKey.includes('...') && cleanedPublicKey.startsWith('pk_');
@@ -224,9 +235,10 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
           ref: tx_ref,
           callback: function (response: any) {
             console.log('[Checkout] Inline Payment success callback received from Paystack:', response);
-            // Once transaction finishes we redirect to our secure API callback route to do server verification
             const referenceId = response.reference || response.trxref || tx_ref;
-            const redirectSuccessUrl = `${redirectUrl}?status=successful&reference=${referenceId}&trxref=${referenceId}`;
+            const redirectSuccessUrl = isBackendActive
+              ? `${redirectUrl}?status=successful&reference=${referenceId}&trxref=${referenceId}`
+              : `${redirectUrl}&reference=${referenceId}&trxref=${referenceId}`;
             window.location.href = redirectSuccessUrl;
           },
           onClose: function () {
