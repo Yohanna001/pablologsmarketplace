@@ -1,10 +1,9 @@
 import { ProductListing, User, Order, Testimonial, Merchant, TrashItem } from './types';
-import { supabase, supabaseDb } from './supabaseClient';
+import { supabase, supabaseDb, stringToUuid } from './supabaseClient';
 
-// Global formatter helper in Thousands (e.g. 15K or 10.5K)
+// Global formatter helper displaying Nigerian Naira with sign before the amount
 export const formatNaira = (value: number): string => {
-  const valInK = value / 1000;
-  return `${valInK % 1 === 0 ? valInK.toFixed(0) : valInK.toFixed(1)}K`;
+  return `₦${Math.round(value).toLocaleString('en-US')}`;
 };
 
 // Seed product listings (in Nigerian Naira ₦)
@@ -156,7 +155,11 @@ export const db = {
     supabaseDb.saveProduct(product).catch(e => console.error('Supabase write-back error:', e));
   },
   updateProduct(updated: ProductListing) {
-    const list = this.getProducts().map(p => p.id === updated.id ? updated : p);
+    const list = this.getProducts().map(p => {
+      const matchExact = p.id === updated.id;
+      const matchUuid = stringToUuid(p.id) === stringToUuid(updated.id);
+      return (matchExact || matchUuid) ? { ...p, ...updated, id: p.id } : p;
+    });
     this.saveProducts(list);
     supabaseDb.saveProduct(updated).catch(e => console.error('Supabase update error:', e));
   },
@@ -272,11 +275,14 @@ export const db = {
     this.saveOrders(list);
     supabaseDb.saveOrder(order).catch(e => console.error('Supabase order save error:', e));
   },
-  updateOrderStatus(orderId: string, status: 'pending' | 'paid' | 'delivered', credentials?: string) {
+  updateOrderStatus(orderId: string, status: 'pending' | 'paid' | 'delivered', credentials?: string, deliveryInstructions?: string) {
     const list = this.getOrders().map(o => {
-      if (o.id === orderId) {
+      const matchExact = o.id === orderId;
+      const matchUuid = stringToUuid(o.id) === stringToUuid(orderId) || o.id === stringToUuid(orderId);
+      if (matchExact || matchUuid) {
         const updated = { ...o, status };
         if (credentials) updated.credentialsShared = credentials;
+        if (deliveryInstructions) updated.deliveryInstructions = deliveryInstructions;
         supabaseDb.saveOrder(updated).catch(e => console.error('Supabase order status update error:', e));
         return updated;
       }

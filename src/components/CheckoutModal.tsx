@@ -37,20 +37,18 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
   React.useEffect(() => {
     const checkConfig = async () => {
       try {
-        const configRes = await fetch('/api/flutterwave/config');
+        const configRes = await fetch('/api/paystack/config');
         if (configRes.ok) {
           const configData = await configRes.json();
           const rawKey = configData.publicKey || '';
           const cleaned = rawKey.trim().replace(/^["']|["']$/g, '').trim();
           
-          const isSecret = cleaned.startsWith('FLWSECK');
+          const isSecret = cleaned.startsWith('sk_') || cleaned.startsWith('PAYSTACK_SECRET');
           const isPlace = cleaned.includes('...') || cleaned === '';
           
           let formatErr = undefined;
-          if (cleaned && !cleaned.startsWith('FLWPUBK')) {
-            formatErr = 'Public Key must start with "FLWPUBK_TEST-" (Test Mode) or "FLWPUBK-" (Live Mode)';
-          } else if (cleaned && !cleaned.startsWith('FLWPUBK_') && !cleaned.startsWith('FLWPUBK-')) {
-            formatErr = 'Key schema separator looks unconventional. Must start with FLWPUBK_TEST- or FLWPUBK-';
+          if (cleaned && !cleaned.startsWith('pk_')) {
+            formatErr = 'Public Key must start with "pk_test_" (Test Mode) or "pk_live_" (Live Mode)';
           }
 
           setConfigStatus({
@@ -62,12 +60,11 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
           });
         }
       } catch (err) {
-        console.warn('[Diagnostics] Fetching key state failed on frontend:', err);
+        console.warn('[Diagnostics] Fetching Paystack key state failed on frontend:', err);
       }
     };
     checkConfig();
   }, []);
-
 
   // Callback to finalize database and credentials decrypt upon payment verification
   const handleCompleteEscrowPayment = (txRef: string) => {
@@ -132,7 +129,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         productPlatform: product.platform,
         amount: product.price,
         status: 'delivered', // Instantly unlocked
-        paymentGateway: 'flutterwave',
+        paymentGateway: 'paystack',
         credentialsShared: releasedCoordinates,
         createdAt: new Date().toISOString()
       };
@@ -145,8 +142,8 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
     }, 1800);
   };
 
-  // Launch secure redirect-based Flutterwave checkout flow
-  const handlePayViaFlutterwave = async (e: React.MouseEvent) => {
+  // Launch secure inline or redirect-based Paystack checkout flow
+  const handlePayViaPaystack = async (e: React.MouseEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setIsInitializing(true);
@@ -163,7 +160,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       console.log('[Checkout] Obtaining gateway public configuration from backend...');
       let publicKey = '';
       try {
-        const configRes = await fetch('/api/flutterwave/config');
+        const configRes = await fetch('/api/paystack/config');
         if (configRes.ok) {
           const configData = await configRes.json();
           publicKey = configData.publicKey;
@@ -173,7 +170,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       }
 
       if (!publicKey) {
-        publicKey = ((import.meta as any).env?.VITE_FLUTTERWAVE_PUBLIC_KEY as string) || '';
+        publicKey = ((import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY as string) || '';
       }
 
       // Clean the key (un-wrap enclosing quotes or spaces that some secret managers insert)
@@ -184,22 +181,22 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       
       const cleanedPublicKey = cleanKey(publicKey);
 
-      if (cleanedPublicKey.startsWith('FLWSECK')) {
-        throw new Error('A Secret Key (starting with "FLWSECK") was loaded in place of the Public Key in the environment configs. Please configure the "FLUTTERWAVE_PUBLIC_KEY" variable using your Public Key (starting with "FLWPUBK").');
+      if (cleanedPublicKey.startsWith('sk_') || cleanedPublicKey.startsWith('PAYSTACK_SECRET_KEY')) {
+        throw new Error('A Secret Key (starting with "sk_") was loaded in place of the Public Key in the environment configs. Please configure the "PAYSTACK_PUBLIC_KEY" variable.');
       }
 
       const host = window.location.host;
       const protocol = window.location.protocol;
       const baseUrl = `${protocol}//${host}`;
-      const redirectUrl = `${baseUrl}/payment/callback`;
+      const redirectUrl = `${baseUrl}/api/paystack/callback`;
 
-      // Check if it's a real, validly-formatted public key starting with FLWPUBK
-      const hasRealKey = cleanedPublicKey && cleanedPublicKey.trim() !== '' && !cleanedPublicKey.includes('...') && cleanedPublicKey.startsWith('FLWPUBK');
-      const flutterwaveObj = (window as any).FlutterwaveCheckout;
+      // Check if it's a real, validly-formatted public key starting with pk_
+      const hasRealKey = cleanedPublicKey && cleanedPublicKey.trim() !== '' && !cleanedPublicKey.includes('...') && cleanedPublicKey.startsWith('pk_');
+      const paystackPopObj = (window as any).PaystackPop;
 
-      // 1. Direct Inline Browser Integration (Immune to GCP proxy server blocks, 100% real checkout in browser)
-      if (flutterwaveObj && hasRealKey) {
-        console.log('[Checkout] Direct Inline Checkout initiated with Public Key:', cleanedPublicKey);
+      // 1. Direct Inline Browser Integration (Popup modal helper)
+      if (paystackPopObj && hasRealKey) {
+        console.log('[Checkout] Direct Inline Checkout initiated with Paystack Public Key:', cleanedPublicKey);
         
         // Register pending order record to provide flawless tracking & secure callback lookup
         const newOrder: Order = {
@@ -212,49 +209,40 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
           productPlatform: product.platform,
           amount: product.price,
           status: 'pending',
-          credentialsShared: 'Pending payment confirmation at Flutterwave secure inline gateway',
-          paymentGateway: 'flutterwave',
+          credentialsShared: 'Pending payment confirmation at Paystack secure inline gateway',
+          paymentGateway: 'paystack',
           createdAt: new Date().toISOString()
         };
 
         db.addOrder(newOrder);
-
         setIsInitializing(false);
 
-        flutterwaveObj({
-          public_key: cleanedPublicKey,
-          tx_ref: tx_ref,
-          amount: product.price,
-          currency: 'NGN',
-          payment_options: 'card,banktransfer,ussd',
-          callback: function (data: any) {
-            console.log('[Checkout] Inline Payment success callback received:', data);
-            const isSuccess = data.status === 'successful' || data.status === 'completed';
-            const redirectSuccessUrl = `${redirectUrl}?status=${isSuccess ? 'successful' : 'failed'}&tx_ref=${tx_ref}&transaction_id=${data.transaction_id || data.id || ''}`;
+        const handler = paystackPopObj.setup({
+          key: cleanedPublicKey,
+          email: buyerEmail.toLowerCase(),
+          amount: Math.round(product.price * 100), // conversion to kobo
+          ref: tx_ref,
+          callback: function (response: any) {
+            console.log('[Checkout] Inline Payment success callback received from Paystack:', response);
+            // Once transaction finishes we redirect to our secure API callback route to do server verification
+            const referenceId = response.reference || response.trxref || tx_ref;
+            const redirectSuccessUrl = `${redirectUrl}?status=successful&reference=${referenceId}&trxref=${referenceId}`;
             window.location.href = redirectSuccessUrl;
           },
-          onclose: function () {
+          onClose: function () {
             console.log('[Checkout] Inline Payment closed/cancelled by user');
-            const redirectCancelUrl = `${redirectUrl}?status=cancelled&tx_ref=${tx_ref}`;
+            const redirectCancelUrl = `/?view=payment-callback&status=failed&tx_ref=${tx_ref}`;
             window.location.href = redirectCancelUrl;
-          },
-          customer: {
-            email: buyerEmail.toLowerCase(),
-            name: 'Verified Buyer',
-            phone_number: buyerPhone || '08000000000'
-          },
-          customizations: {
-            title: 'Escrow Account Credentials Checkout',
-            description: `Release invoice reference: ${tx_ref}`,
-            logo: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'
           }
         });
+
+        handler.openIframe();
         return;
       }
 
-      // 2. Server-side Checkout Link Fallback (Preferred C2C split subaccount model)
+      // 2. Server-side Checkout Link Fallback (Redirection based API handshake)
       console.warn('[Checkout] Public Key missing or default placeholder. Attempting checkout session initialization via server...');
-      const response = await fetch('/api/flutterwave/initialize-payment', {
+      const response = await fetch('/api/paystack/initialize-payment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -262,8 +250,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         body: JSON.stringify({
           amount: product.price,
           email: buyerEmail.toLowerCase(),
-          tx_ref,
-          phone: buyerPhone || '08000000000'
+          tx_ref
         })
       });
 
@@ -292,8 +279,8 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
         productPlatform: product.platform,
         amount: product.price,
         status: 'pending',
-        credentialsShared: 'Pending payment confirmation at Flutterwave standard redirect gateway',
-        paymentGateway: 'flutterwave',
+        credentialsShared: 'Pending payment confirmation at Paystack standard redirect gateway',
+        paymentGateway: 'paystack',
         createdAt: new Date().toISOString()
       };
 
@@ -323,19 +310,19 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
       >
         
         {/* Header Ribbon */}
-        <div className="bg-[#1A1A2E] text-white p-5 flex items-center justify-between border-b border-[#E0E0E0]/15">
+        <div className="bg-[#0F3460] text-white p-5 flex items-center justify-between border-b border-[#E0E0E0]/15">
           <div className="flex items-center gap-2.5">
             <span className="p-2 rounded-lg bg-white/10 text-emerald-400 border border-white/5">
               <ShoppingCart className="w-4 h-4" />
             </span>
             <div>
-              <h3 className="font-heading font-semibold text-sm leading-none">Flutterwave Live Escrow Checkout</h3>
-              <p className="text-[10px] text-slate-350 mt-1 uppercase tracking-widest font-extrabold font-sans">Verified Credentials Delivery</p>
+              <h3 className="font-heading font-semibold text-sm leading-none">Paystack Live Escrow Checkout</h3>
+              <p className="text-[10px] text-slate-300 mt-1 uppercase tracking-widest font-extrabold font-sans">Verified Credentials Delivery</p>
             </div>
           </div>
           {step !== 'processing' && (
             <button
-              id="checkout-close-btn"
+               id="checkout-close-btn"
               onClick={onClose}
               className="p-1.5 rounded-full hover:bg-white/10 text-slate-300 hover:text-white transition cursor-pointer"
             >
@@ -384,7 +371,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
               </div>
             </div>
 
-            {/* Official Flutterwave Checkout Integration */}
+            {/* Official Paystack Checkout Integration */}
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-[#1A1A2E] mb-2 uppercase tracking-wider">
@@ -412,24 +399,24 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
               <div className="pt-2">
                 <button
                   type="button"
-                  id="fw-checkout-trigger-btn"
-                  onClick={handlePayViaFlutterwave}
+                  id="paystack-checkout-trigger-btn"
+                  onClick={handlePayViaPaystack}
                   disabled={isInitializing || configStatus.isSecretSwapped}
                   className={`w-full py-3.5 text-white font-extrabold text-sm rounded-xl transition-all duration-200 active:scale-[0.99] flex items-center justify-center gap-2.5 shadow-md cursor-pointer ${
                     isInitializing || configStatus.isSecretSwapped
                       ? 'bg-slate-400 cursor-not-allowed'
-                      : 'bg-[#E94560] hover:bg-[#D83A52]'
+                      : 'bg-[#0F3460] hover:bg-[#16213E]'
                   }`}
                 >
                   {isInitializing ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      Redirecting to Flutterwave...
+                      Redirecting to Paystack...
                     </>
                   ) : (
                     <>
                       <Shield className="w-4 h-4 text-white" />
-                      Pay ₦{product.price.toLocaleString()} via Flutterwave Checkout
+                      Pay ₦{product.price.toLocaleString()} via Paystack Checkout
                     </>
                   )}
                 </button>
@@ -462,7 +449,7 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
             </div>
             
             <div className="text-[9px] font-mono bg-[#F5F5F7] border border-[#E0E0E0] p-2 rounded max-w-xs mx-auto text-[#4A4A6A]">
-              REF: FLUTTERWAVE-{Math.random().toString(36).substring(3, 11).toUpperCase()}
+              REF: PAYSTACK-{Math.random().toString(36).substring(3, 11).toUpperCase()}
             </div>
           </div>
         )}
@@ -516,11 +503,11 @@ export default function CheckoutModal({ product, currentUser, onClose, onPayment
               </div>
               <div className="flex justify-between">
                 <span className="text-[#4A4A6A]">Sum Paid:</span>
-                <span className="font-extrabold text-[#E94560]">{formatNaira(createdOrder.amount)} (₦{createdOrder.amount.toLocaleString()})</span>
+                <span className="font-extrabold text-[#E94560]">{formatNaira(createdOrder.amount)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#4A4A6A]">Clearing Escrow Gateway:</span>
-                <span className="font-extrabold text-[9px] uppercase text-emerald-800 bg-emerald-50 border px-1 rounded">Flutterwave Escrow</span>
+                <span className="font-extrabold text-[9px] uppercase text-emerald-800 bg-emerald-50 border px-1 rounded">Paystack Escrow</span>
               </div>
             </div>
 

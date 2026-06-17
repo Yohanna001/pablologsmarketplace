@@ -144,7 +144,7 @@ export default function Navbar({
           </div>
 
           {/* Mobile hamburger menu button */}
-          <div className="flex lg:hidden items-center">
+          <div className="hidden items-center">
             {currentUser && (
               <button
                 id="mobile-nav-marketplace-shortcut"
@@ -169,7 +169,7 @@ export default function Navbar({
 
       {/* Mobile Menu, show/hide based on hamburger click */}
       {isOpen && (
-        <div id="mobile-menu-container" className="lg:hidden bg-[#1A1A2E] border-t border-[#E0E0E0]/15 py-3 px-4 space-y-3 shadow-lg">
+        <div id="mobile-menu-container" className="hidden md:block lg:hidden bg-[#1A1A2E] border-t border-[#E0E0E0]/15 py-3 px-4 space-y-3 shadow-lg">
           <div className="space-y-1">
             {navLinks.map((link) => (
               <button

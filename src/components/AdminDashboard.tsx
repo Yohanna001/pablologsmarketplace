@@ -9,7 +9,7 @@ import {
 import { ProductListing, User, Order, CredentialEntry, Merchant, TrashItem } from '../types';
 import { db, formatNaira } from '../data';
 import { encryptCredentials, decryptCredentials } from '../utils/crypto';
-import { supabase, supabaseUrl, isConfigured } from '../supabaseClient';
+import { supabase, supabaseUrl, isConfigured, stringToUuid } from '../supabaseClient';
 
 interface AdminDashboardProps {
   currentUser: User | null;
@@ -124,13 +124,13 @@ export default function AdminDashboard({
 
     try {
       const payload = {
-        event: 'charge.completed',
+        event: 'charge.success',
         data: {
           id: Math.floor(1000000 + Math.random() * 9000000).toString(),
-          tx_ref: webhookSimRef,
-          amount: Number(webhookSimAmount),
+          reference: webhookSimRef,
+          amount: Number(webhookSimAmount) * 100,
           currency: 'NGN',
-          status: 'successful',
+          status: 'success',
           customer: {
             email: 'buyer@customer.com',
             name: 'Sarah Customer'
@@ -138,11 +138,10 @@ export default function AdminDashboard({
         }
       };
 
-      const response = await fetch('/api/flutterwave/webhook', {
+      const response = await fetch('/api/paystack/webhook', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'verif-hash': webhookSimSecret
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
@@ -155,7 +154,7 @@ export default function AdminDashboard({
         onRefreshData();
       } else {
         setWebhookSimStatus('failed');
-        setWebhookSimFeedback(`❌ Webhook payload rejected or signature unmatched!\n\nStatus code: ${response.status}\nServer Error Response:\n${JSON.stringify(data, null, 2)}\n\n💡 Reason:\n1. If a FLUTTERWAVE_WEBHOOK_SECRET has been loaded in your .env or server environment, your simulator input signature "${webhookSimSecret}" must match it exactly.\n2. In production setups, Flutterwave's transaction validation service will crosscheck fake transactions against real API logs and reject fraud attempts.`);
+        setWebhookSimFeedback(`❌ Webhook payload rejected!\n\nStatus code: ${response.status}\nServer Error Response:\n${JSON.stringify(data, null, 2)}\n\n💡 Reason:\nDouble check that the reference code matches an existing active order transaction reference so it can be verified correctly.`);
       }
     } catch (err: any) {
       setWebhookSimStatus('failed');
@@ -472,7 +471,7 @@ export default function AdminDashboard({
     const finalImg = imageUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60';
 
     if (editingId) {
-      const existing = listings.find(p => p.id === editingId);
+      const existing = listings.find(p => p.id === editingId || stringToUuid(p.id) === stringToUuid(editingId));
       if (existing) {
         const mergedCreds = parsedCredentials.map(newC => {
           const rawPlain = decryptCredentials(newC.rawText || '');
@@ -487,6 +486,7 @@ export default function AdminDashboard({
 
         const updated: ProductListing = {
           ...existing,
+          id: existing.id, // Explicitly keep the same ID
           title,
           platform,
           price: priceNum,
@@ -1043,7 +1043,7 @@ export default function AdminDashboard({
             activeTab === 'webhooks' ? 'border-[#0F3460] text-[#0F3460] font-bold' : 'border-transparent text-slate-400 hover:text-[#0F3460]'
           }`}
         >
-          ⚓ Flutterwave Webhooks
+          ⚓ Paystack Webhooks
         </button>
 
       </div>
@@ -2587,10 +2587,10 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
                 <div className="space-y-1">
                   <h2 className="font-heading font-extrabold text-[#FAFAFC] text-xl tracking-tight flex items-center gap-2">
                     <Globe className="w-5 h-5 text-emerald-400 animate-pulse" />
-                    Flutterwave Webhooks System
+                    Paystack Webhooks System
                   </h2>
                   <p className="text-xs text-slate-300 font-sans max-w-2xl leading-relaxed">
-                    Configure real-time automated order delivery, handle escrow deposits, and secure payment signals using verified signature hashes.
+                    Configure real-time automated order delivery, handle escrow deposits, and secure payment signals using verified API reference validations.
                   </p>
                 </div>
               </div>
@@ -2598,12 +2598,12 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
                 <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Dynamic Production Webhook URL</div>
                 <div className="flex items-center gap-2 mt-1.5">
                   <span className="font-mono text-xs text-emerald-400 select-all truncate max-w-[180px]">
-                    {typeof window !== 'undefined' ? `${window.location.origin}/api/flutterwave/webhook` : '/api/flutterwave/webhook'}
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/paystack/webhook` : '/api/paystack/webhook'}
                   </span>
                   <button 
                     onClick={() => {
                       if (typeof window !== 'undefined') {
-                        navigator.clipboard.writeText(`${window.location.origin}/api/flutterwave/webhook`);
+                        navigator.clipboard.writeText(`${window.location.origin}/api/paystack/webhook`);
                         alert('Dynamic webhook path successfully copied to clipboard!');
                       }
                     }}
@@ -2623,7 +2623,7 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
               
               <div className="border-b pb-4">
                 <h3 className="font-heading font-extrabold text-[#1A1A2E] text-base flex items-center gap-1.5">
-                  🛡️ How To Create / Secure a Flutterwave Webhook Secret
+                  🛡️ How To Configure Your Paystack Webhook
                 </h3>
                 <p className="text-xs text-[#4A4A6A] mt-1">
                   Follow these step-by-step instructions to link, authenticate, and run your automated escrow payment updates.
@@ -2638,9 +2638,9 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
                     1
                   </div>
                   <div className="space-y-1 mt-0.5">
-                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Log In to Flutterwave</h4>
+                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Log In to Paystack</h4>
                     <p className="text-xs text-[#4A4A6A]">
-                      Navigate to your <strong>official Flutterwave Dashboard</strong> (either in Test or Production Mode) at <a href="https://dashboard.flutterwave.com" target="_blank" rel="noopener noreferrer" className="text-[#0F3460] font-bold hover:underline">dashboard.flutterwave.com</a>.
+                      Navigate to your <strong>official Paystack Dashboard</strong> (either in Test or Production Mode) at <a href="https://dashboard.paystack.co" target="_blank" rel="noopener noreferrer" className="text-[#0F3460] font-bold hover:underline">dashboard.paystack.co</a>.
                     </p>
                   </div>
                 </div>
@@ -2670,7 +2670,7 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
                     </p>
                     <div className="bg-[#FAFAFC] border border-slate-200 p-2.5 rounded-lg flex items-center justify-between mt-1 text-[11px] font-mono select-all">
                       <span className="text-[#0F3460] truncate mr-2 font-bold">
-                        {typeof window !== 'undefined' ? `${window.location.origin}/api/flutterwave/webhook` : 'https://your-site.vercel.app/api/flutterwave/webhook'}
+                        {typeof window !== 'undefined' ? `${window.location.origin}/api/paystack/webhook` : 'https://your-site.vercel.app/api/paystack/webhook'}
                       </span>
                     </div>
                   </div>
@@ -2682,40 +2682,13 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
                     4
                   </div>
                   <div className="space-y-1 mt-0.5">
-                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Create a Secret Hash (Your Webhook Secret Key)</h4>
-                    <p className="text-xs text-[#4A4A6A] leading-relaxed">
-                      In the <strong>Secret Hash</strong> text field on Flutterwave, type a custom hidden key (random alphanumeric code of your choice). For example: <code className="bg-rose-50 border border-rose-150 px-1.5 py-0.5 rounded text-[#E94560] font-mono font-bold text-[10px]">MyEscrowSecureHash2026</code>.
-                      Flutterwave will sign all callback notifications with this secret so that other servers are prevented from sending fraudulent reports.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 5 */}
-                <div className="flex gap-4">
-                  <div className="flex-none w-7 h-7 bg-slate-100 rounded-full border border-slate-300 flex items-center justify-center font-bold text-xs text-[#1A1A2E]">
-                    2
-                  </div>
-                  <div className="space-y-1 mt-0.5">
-                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Subscribe to Events</h4>
-                    <p className="text-xs text-[#4A4A6A]">
-                      Check the box labeled <strong><code>charge.completed</code></strong>. Save the setting on Flutterwave to prime the automatic triggers.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 6 */}
-                <div className="flex gap-4">
-                  <div className="flex-none w-7 h-7 bg-emerald-600 rounded-full border border-emerald-600 flex items-center justify-center font-bold text-xs text-white">
-                    ✓
-                  </div>
-                  <div className="space-y-1 mt-0.5">
-                    <h4 className="text-xs font-extrabold text-emerald-800">Add key to Vercel/Server Config</h4>
-                    <p className="text-xs text-[#4A4A6A] leading-relaxed">
-                      On Vercel, open your project settings dashboard and register the signature under <strong>Environment Variables</strong>:
+                    <h4 className="text-xs font-extrabold text-[#1A1A2E]">Add Server Environment Variables</h4>
+                    <p className="text-xs text-[#4A4A6A] leading-relaxed font-sans">
+                      Open your hosting settings dashboard (such as Vercel or GCP Cloud Run), and configure your Paystack API keys securely under <strong>Environment Variables</strong>:
                     </p>
                     <div className="bg-slate-900 text-slate-100 p-3 rounded-xl mt-1.5 text-[10.5px] font-mono space-y-1 border border-white/5">
-                      <div><span className="text-pink-400">Key:</span> FLUTTERWAVE_WEBHOOK_SECRET</div>
-                      <div><span className="text-pink-400">Value:</span> (Paste the exact same Secret Hash you typed in Step 4)</div>
+                      <div><span className="text-pink-400">Key:</span> PAYSTACK_PUBLIC_KEY</div>
+                      <div><span className="text-pink-400">Key:</span> PAYSTACK_SECRET_KEY</div>
                     </div>
                   </div>
                 </div>
@@ -2839,7 +2812,7 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
                   🔒 Anti-Fraud Handshake Checklist
                 </span>
                 <p className="leading-relaxed">
-                  Your server executes a strict Double-Verification model. When a Webhook reports an order payment, the system is designed to immediately connect back to the official <code>api.flutterwave.com</code> gateways to double-verify the transaction details against original logs before releasing credentials. This blocks injection and payload attacks completely.
+                  Your server executes a strict Double-Verification model. When a Webhook reports an order payment, the system is designed to immediately connect back to the official <code>api.paystack.co</code> gateways to double-verify the transaction details against original logs before releasing credentials. This blocks injection and payload attacks completely.
                 </p>
               </div>
 

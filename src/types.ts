@@ -76,8 +76,9 @@ export interface Order {
   productPlatform: string;
   amount: number;
   status: 'pending' | 'paid' | 'delivered';
-  paymentGateway: 'paystack' | 'stripe' | 'paypal' | 'flutterwave';
+  paymentGateway: 'paystack' | 'stripe' | 'paypal';
   credentialsShared?: string; // The login/account details delivered on success
+  deliveryInstructions?: string; // Delivery instructions for this order
   createdAt: string;
 }
 

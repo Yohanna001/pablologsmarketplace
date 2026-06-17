@@ -210,6 +210,19 @@ function mapProductToDb(prod: ProductListing) {
 }
 
 function mapOrderFromDb(row: any): Order {
+  let credentialsText = row.credentials_shared || '';
+  let deliveryInstructions = '';
+
+  if (credentialsText && credentialsText.trim().startsWith('{') && credentialsText.trim().endsWith('}')) {
+    try {
+      const parsed = JSON.parse(credentialsText);
+      credentialsText = parsed.credentials || '';
+      deliveryInstructions = parsed.deliveryInstructions || '';
+    } catch (e) {
+      // Ignore parsing errors and treat as raw text
+    }
+  }
+
   return {
     id: row.id,
     buyerEmail: row.buyer_email || row.customer_email || 'buyer@pablologs.com',
@@ -219,7 +232,8 @@ function mapOrderFromDb(row: any): Order {
     productPlatform: row.product_platform,
     amount: Number(row.amount),
     status: row.status as 'pending' | 'paid' | 'delivered',
-    credentialsShared: row.credentials_shared,
+    credentialsShared: credentialsText,
+    deliveryInstructions: deliveryInstructions,
     paymentGateway: row.payment_gateway,
     createdAt: row.created_at,
   };
@@ -228,6 +242,15 @@ function mapOrderFromDb(row: any): Order {
 function mapOrderToDb(order: Order) {
   const finalEmail = order.buyerEmail || 'buyer@pablologs.com';
   const finalName = order.buyerName || 'Verified Buyer';
+
+  let credentialsPacked = order.credentialsShared || '';
+  if (order.deliveryInstructions || order.credentialsShared) {
+    credentialsPacked = JSON.stringify({
+      credentials: order.credentialsShared || '',
+      deliveryInstructions: order.deliveryInstructions || ''
+    });
+  }
+
   return {
     id: stringToUuid(order.id),
     buyer_email: finalEmail,
@@ -240,7 +263,7 @@ function mapOrderToDb(order: Order) {
     product_platform: order.productPlatform,
     amount: order.amount,
     status: order.status,
-    credentials_shared: order.credentialsShared,
+    credentials_shared: credentialsPacked,
     payment_gateway: order.paymentGateway,
     created_at: order.createdAt,
     phone: order.buyerPhone || (order as any).phone || '+2348000000000', // Satisfies any non-null constraint on phone column

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, ShieldCheck, AlertCircle, Sparkles, SlidersHorizontal, RefreshCw } from 'lucide-react';
+import { Search, Filter, ShieldCheck, AlertCircle, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import { ProductListing, User } from '../types';
 import { formatNaira } from '../data';
 
@@ -107,20 +107,6 @@ export default function Marketplace({ listings, currentUser, onBuyNow, onOpenAut
   return (
     <div id="marketplace-page-root" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       
-      {/* Dynamic Tag/Announcements for user reassurance */}
-      <div className="mb-8 p-3 bg-[#F5F5F7] border border-[#E0E0E0] rounded-xl text-xs text-[#1A1A2E] flex items-center justify-between gap-4">
-        <span className="flex items-center gap-1.5 font-medium">
-          <Sparkles className="w-4 h-4 text-[#0F3460] animate-pulse" />
-          Escrow Active: Sellers receive payments via Paystack after you verify login details. Safe, instant delivery.
-        </span>
-        <button 
-          onClick={() => handleResetFilters()} 
-          className="text-[10px] bg-white border border-[#E0E0E0] text-[#0F3460] px-2 py-1 rounded hover:bg-[#F5F5F7] font-bold uppercase tracking-wider"
-        >
-          Reset Stats
-        </button>
-      </div>
-
       <div className="text-center md:text-left mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-heading font-normal text-[#1A1A2E]">
@@ -258,7 +244,7 @@ export default function Marketplace({ listings, currentUser, onBuyNow, onOpenAut
               </button>
             </div>
           ) : (
-            <div id="product-grid" className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+            <div id="product-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredListings.map((item) => (
                 <div
                   key={item.id}
@@ -293,6 +279,11 @@ export default function Marketplace({ listings, currentUser, onBuyNow, onOpenAut
                   {/* Body Text */}
                   <div className="p-4 flex-grow flex flex-col justify-between">
                     <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="text-[9px] font-bold text-[#0F3460] bg-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wider font-sans">
+                          {item.platform}
+                        </span>
+                      </div>
                       <h3 className="font-heading font-semibold text-sm text-[#1A1A2E] tracking-tight hover:text-[#0F3460] cursor-pointer line-clamp-2 min-h-[40px] transition-colors" title={item.title}>
                         {item.title}
                       </h3>
