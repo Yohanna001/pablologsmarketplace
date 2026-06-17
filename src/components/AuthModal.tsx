@@ -164,40 +164,6 @@ export default function AuthModal({ onClose, onLoginSuccess, initialView = 'logi
                     />
                   </div>
                 </div>
-
-                {/* Role Toggle Selector */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#1A1A2E] mb-1.5 uppercase tracking-wide">
-                    Account Type (Register Role)
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <button
-                      type="button"
-                      id="role-btn-buyer"
-                      onClick={() => setRole('buyer')}
-                      className={`py-2.5 text-xs font-semibold border rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                        role === 'buyer'
-                          ? 'bg-slate-50 border-[#0F3460] text-[#1A1A2E]'
-                          : 'bg-white border-[#E0E0E0] text-[#4A4A6A] hover:bg-slate-50'
-                      }`}
-                    >
-                      Buyer Acc
-                    </button>
-                    <button
-                      type="button"
-                      id="role-btn-merchant"
-                      onClick={() => setRole('merchant')}
-                      className={`py-2.5 text-xs font-semibold border rounded-lg transition-all flex items-center justify-center gap-1.5 relative ${
-                        role === 'merchant'
-                          ? 'bg-slate-50 border-[#0F3460] text-[#1A1A2E]'
-                          : 'bg-white border-[#E0E0E0] text-[#4A4A6A] hover:bg-slate-50'
-                      }`}
-                    >
-                      Merchant Acc
-                      <span className="absolute -top-1.5 -right-1 px-1 bg-[#E94560] text-white font-bold rounded text-[8px] uppercase tracking-wider scale-90">Pending Auth</span>
-                    </button>
-                  </div>
-                </div>
               </>
             )}
 
