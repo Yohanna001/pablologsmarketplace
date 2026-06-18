@@ -848,12 +848,15 @@ async function startServer() {
     });
   }
 
-  // Only listen if not running in a Serverless environment like Vercel
-  if (!process.env.VERCEL) {
+  // Web containers and standard local development must listen on port 3000 to be reachable
+  const shouldListen = !process.env.VERCEL || process.env.NODE_ENV !== 'production' || process.env.PORT === '3000';
+  if (shouldListen) {
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server listening at http://localhost:${PORT}`);
+      console.log(`Server listening at http://0.0.0.0:${PORT} (shouldListen: ${shouldListen}, VERCEL: ${process.env.VERCEL})`);
       console.log(`Default Super Admin seeded as admin@purelogsmartketaplace.com`);
     });
+  } else {
+    console.log(`Server initialized but skipping direct listen under serverless context (VERCEL detected)`);
   }
 }
 
