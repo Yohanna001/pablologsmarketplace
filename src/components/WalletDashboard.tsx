@@ -64,6 +64,38 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
     fetchWallet();
   }, [currentUser]);
 
+  // Load Paystack script dynamically if not found
+  const loadPaystackScript = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if ((window as any).PaystackPop) {
+        resolve(true);
+        return;
+      }
+      const existingScript = document.querySelector('script[src*="paystack.co"]');
+      if (existingScript) {
+        // Wait briefly for it to load
+        let checkCount = 0;
+        const interval = setInterval(() => {
+          if ((window as any).PaystackPop) {
+            clearInterval(interval);
+            resolve(true);
+          } else if (checkCount > 30) {
+            clearInterval(interval);
+            resolve(false);
+          }
+          checkCount++;
+        }, 100);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://js.paystack.co/v1/inline.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   // Handle funding button click
   const handleFundWallet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,14 +110,31 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
 
     try {
       // 1. Fetch Paystack Config to see if alive
-      const configRes = await fetch('/api/paystack/config');
-      const configData = await configRes.json();
-      const publicKey = configData.publicKey;
+      let publicKey = '';
+      try {
+        const configRes = await fetch('/api/paystack/config');
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          publicKey = configData.publicKey;
+        }
+      } catch (e) {
+        console.warn('[Wallet] Could not fetch server paystack config:', e);
+      }
+
+      // 2. Fallback to Vite client environment variables if server didn't provide a valid pk_ key
+      if (!publicKey || !publicKey.startsWith('pk_')) {
+        const vitePk = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY;
+        if (vitePk && vitePk.startsWith('pk_')) {
+          publicKey = vitePk;
+        }
+      }
       
+      // Ensure script has fully loaded
+      const isScriptLoaded = await loadPaystackScript();
       const paystackPopObj = (window as any).PaystackPop;
       const hasRealKey = publicKey && publicKey.trim() !== '' && !publicKey.includes('...') && publicKey.startsWith('pk_');
 
-      if (paystackPopObj && hasRealKey) {
+      if (isScriptLoaded && paystackPopObj && hasRealKey) {
         // Option A: Real Paystack Inline Pop Setup
         setIsFunding(false);
         setShowFundModal(false);
@@ -95,7 +144,7 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
           fetch('/api/wallet/verify-funding', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reference: refId, email: currentUser?.email })
+            body: JSON.stringify({ reference: refId, email: currentUser?.email, amount: amountNum })
           })
           .then(res => res.json().then(data => ({ ok: res.ok, data })))
           .then(({ ok, data }) => {
@@ -113,27 +162,52 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
           });
         };
 
-        const handler = paystackPopObj.setup({
-          key: publicKey,
-          email: currentUser?.email.toLowerCase(),
-          amount: Math.round(amountNum * 100),
-          ref: tx_ref,
-          callback: function (response: any) {
-            const returnedReference = response.reference || response.trxref || tx_ref;
-            handleVerifyPayment(returnedReference);
-          },
-          onSuccess: function (response: any) {
-            const returnedReference = response.reference || response.trxref || tx_ref;
-            handleVerifyPayment(returnedReference);
-          },
-          onClose: function () {
-            triggerAlert('Funding window closed', 'info');
-          },
-          onCancel: function () {
-            triggerAlert('Funding window closed', 'info');
+        // Leverage V2 class instantiation if V1 setup static helper is missing
+        try {
+          if (typeof paystackPopObj.setup === 'function') {
+            // Legacy/V1 mode
+            const handler = paystackPopObj.setup({
+              key: publicKey,
+              email: currentUser?.email.toLowerCase(),
+              amount: Math.round(amountNum * 100),
+              ref: tx_ref,
+              callback: function (response: any) {
+                const returnedReference = response.reference || response.trxref || tx_ref;
+                handleVerifyPayment(returnedReference);
+              },
+              onClose: function () {
+                triggerAlert('Funding window closed', 'info');
+              },
+              onCancel: function () {
+                triggerAlert('Funding window closed', 'info');
+              }
+            });
+            handler.openIframe();
+          } else {
+            // Standard V2 mode
+            const paystackInstance = new paystackPopObj();
+            paystackInstance.newTransaction({
+              key: publicKey,
+              email: currentUser?.email.toLowerCase(),
+              amount: Math.round(amountNum * 100),
+              ref: tx_ref,
+              onSuccess: function (response: any) {
+                const returnedReference = response.reference || response.trxref || tx_ref;
+                handleVerifyPayment(returnedReference);
+              },
+              onCancel: function () {
+                triggerAlert('Funding window closed', 'info');
+              }
+            });
           }
-        });
-        handler.openIframe();
+        } catch (initErr: any) {
+          console.error('[Paystack launcher crash]', initErr);
+          // Fall back gracefully to sandbox if Paystack pop fails to launch or is blocked by user browser/IFrame sandbox rules
+          triggerAlert('Paystack Pop was blocked or encountered an issue. Falling back to simulated wallet funding sandbox...', 'info');
+          setSimulatedRef(tx_ref);
+          setSimulatedAmount(amountNum);
+          setShowSandboxGateway(true);
+        }
       } else {
         // Option B: Elegant, fast interactive Developer sandbox checkout fallback
         setIsFunding(false);
