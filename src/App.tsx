@@ -1334,8 +1334,35 @@ export default function App() {
                   {selectedViewOrder.credentialsShared && (
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(selectedViewOrder.credentialsShared || '');
-                        triggerAlert('Credentials successfully copied to your clipboard!', 'success');
+                        const textToCopy = selectedViewOrder.credentialsShared || '';
+                        try {
+                          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                            navigator.clipboard.writeText(textToCopy);
+                            triggerAlert('Credentials successfully copied to your clipboard!', 'success');
+                          } else {
+                            throw new Error('Fallback required');
+                          }
+                        } catch (err) {
+                          const textArea = document.createElement('textarea');
+                          textArea.value = textToCopy;
+                          textArea.style.top = '0';
+                          textArea.style.left = '0';
+                          textArea.style.position = 'fixed';
+                          textArea.style.opacity = '0';
+                          document.body.appendChild(textArea);
+                          textArea.focus();
+                          textArea.select();
+                          let success = false;
+                          try {
+                            success = document.execCommand('copy');
+                          } catch (e) {}
+                          document.body.removeChild(textArea);
+                          if (success) {
+                            triggerAlert('Credentials successfully copied to your clipboard!', 'success');
+                          } else {
+                            triggerAlert('Copy Failed', 'error');
+                          }
+                        }
                       }}
                       className="absolute right-3 top-3 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[9px] font-extrabold text-emerald-400 rounded border border-emerald-400/20 active:scale-95 transition cursor-pointer"
                     >

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, AlertCircle, PlusCircle, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, AlertCircle, PlusCircle, CheckCircle, ShieldAlert, Copy } from 'lucide-react';
 import { User, Order } from '../types';
 
 interface WalletDashboardProps {
@@ -38,6 +38,50 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
   const [sandboxCvv, setSandboxCvv] = useState('');
   const [simulatedRef, setSimulatedRef] = useState('');
   const [simulatedAmount, setSimulatedAmount] = useState(0);
+  const [sandboxTab, setSandboxTab] = useState<'card' | 'transfer'>('card');
+
+  // Robust, Cross-Platform Copy to Clipboard functionality with fallback
+  const handleCopyAccountNumber = async () => {
+    const textToCopy = '9920194857';
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(textToCopy);
+        triggerAlert('Account number copied successfully', 'success');
+      } else {
+        throw new Error('Modern Clipboard API not found or blocked');
+      }
+    } catch (err: any) {
+      console.warn('[Clipboard API failed, running robust fallback selector]:', err);
+      
+      // Fallback Method using dynamic input select and execCommand for high sandboxed iframe compatibility
+      const textArea = document.createElement('textarea');
+      textArea.value = textToCopy;
+      textArea.style.top = '0';
+      textArea.style.left = '0';
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      
+      // Select text
+      textArea.focus();
+      textArea.select();
+      
+      let success = false;
+      try {
+        success = document.execCommand('copy');
+      } catch (fallbackErr) {
+        console.error('[Fallback Copy Command genuinely failed]', fallbackErr);
+      }
+      
+      document.body.removeChild(textArea);
+      
+      if (success) {
+        triggerAlert('Account number copied successfully', 'success');
+      } else {
+        triggerAlert('Copy Failed', 'error');
+      }
+    }
+  };
 
   // Fetch Wallet Data from Secure Backend
   const fetchWallet = async () => {
@@ -448,49 +492,130 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
               <span className="text-[8px] bg-amber-50 border border-amber-250 text-amber-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Test Mode</span>
             </div>
 
-            <div className="space-y-1">
-              <h4 className="text-xs font-extrabold text-slate-800">Card Payment Simulation</h4>
-              <p className="text-[10px] text-slate-450 leading-relaxed font-sans">
-                You are paying <b className="text-slate-800">₦{simulatedAmount.toLocaleString()}</b> using reference ID <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[9px]">{simulatedRef}</code>.
-              </p>
+            {/* Tab Selection */}
+            <div className="flex border-b border-slate-100 text-xs font-bold shrink-0">
+              <button
+                type="button"
+                onClick={() => setSandboxTab('card')}
+                className={`flex-1 pb-2 border-b-2 text-center transition cursor-pointer ${
+                  sandboxTab === 'card'
+                    ? 'border-[#0F3460] text-[#0F3460]'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Simulated Card
+              </button>
+              <button
+                type="button"
+                onClick={() => setSandboxTab('transfer')}
+                className={`flex-1 pb-2 border-b-2 text-center transition cursor-pointer ${
+                  sandboxTab === 'transfer'
+                    ? 'border-[#0F3460] text-[#0F3460]'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Bank Transfer
+              </button>
             </div>
 
-            {/* Fake credit card inputs */}
-            <div className="space-y-3 pt-1">
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Credit Card Number</label>
-                <input
-                  type="text"
-                  placeholder="4000 1234 5678 9010"
-                  value={sandboxCard}
-                  onChange={(e) => setSandboxCard(e.target.value.replace(/\D/g, '').substring(0, 16))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tracking-widest text-[#1A1A2E] h-[40px] focus:outline-none focus:ring-1 focus:ring-[#0F3460]"
-                />
-              </div>
+            {/* Tab A: Card Payment Simulation */}
+            {sandboxTab === 'card' && (
+              <div className="space-y-3 animate-[fadeIn_0.15s_ease]">
+                <div className="space-y-1">
+                  <h4 className="text-xs font-extrabold text-slate-800">Card Payment Simulation</h4>
+                  <p className="text-[10px] text-slate-450 leading-relaxed font-sans">
+                    You are paying <b className="text-slate-800">₦{simulatedAmount.toLocaleString()}</b> using reference ID <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[9px]">{simulatedRef}</code>.
+                  </p>
+                </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Expiry Date</label>
-                  <input
-                    type="text"
-                    placeholder="MM / YY"
-                    value={sandboxExpiry}
-                    onChange={(e) => setSandboxExpiry(e.target.value.substring(0, 5))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono h-[40px] text-center focus:outline-none focus:ring-1 focus:ring-[#0F3460]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">CVV</label>
-                  <input
-                    type="password"
-                    placeholder="123"
-                    value={sandboxCvv}
-                    onChange={(e) => setSandboxCvv(e.target.value.replace(/\D/g, '').substring(0, 3))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono h-[40px] text-center focus:outline-none focus:ring-1 focus:ring-[#0F3460]"
-                  />
+                {/* Fake credit card inputs */}
+                <div className="space-y-3 pt-1">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Credit Card Number</label>
+                    <input
+                      type="text"
+                      placeholder="4000 1234 5678 9010"
+                      value={sandboxCard}
+                      onChange={(e) => setSandboxCard(e.target.value.replace(/\D/g, '').substring(0, 16))}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tracking-widest text-[#1A1A2E] h-[40px] focus:outline-none focus:ring-1 focus:ring-[#0F3460]"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Expiry Date</label>
+                      <input
+                        type="text"
+                        placeholder="MM / YY"
+                        value={sandboxExpiry}
+                        onChange={(e) => setSandboxExpiry(e.target.value.substring(0, 5))}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono h-[40px] text-center focus:outline-none focus:ring-1 focus:ring-[#0F3460]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">CVV</label>
+                      <input
+                        type="password"
+                        placeholder="123"
+                        value={sandboxCvv}
+                        onChange={(e) => setSandboxCvv(e.target.value.replace(/\D/g, '').substring(0, 3))}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono h-[40px] text-center focus:outline-none focus:ring-1 focus:ring-[#0F3460]"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Tab B: Bank Transfer Simulation */}
+            {sandboxTab === 'transfer' && (
+              <div className="space-y-3 animate-[fadeIn_0.15s_ease]">
+                <div className="space-y-1">
+                  <h4 className="text-xs font-extrabold text-slate-800 font-sans">Bank Transfer Simulation</h4>
+                  <p className="text-[10px] text-slate-450 leading-relaxed font-sans">
+                    Transfer exactly <b className="text-slate-800">₦{simulatedAmount.toLocaleString()}</b> to the virtual escrow bank details listed below:
+                  </p>
+                </div>
+
+                <div className="bg-[#F8FAFC] border border-slate-200 p-4 rounded-xl text-xs space-y-3 font-sans">
+                  <div className="flex justify-between items-center py-0.5 border-b border-dashed border-slate-200 pb-2">
+                    <span className="text-slate-400 font-medium font-sans">Bank Name</span>
+                    <span className="font-extrabold text-[#1A1A2E] font-sans">Paystack-Titan / Wema Bank</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-0.5 border-b border-dashed border-slate-200 pb-2">
+                    <span className="text-slate-400 font-medium font-sans">Account Number</span>
+                    <div className="flex items-center gap-1.5 bg-[#F1F5F9] px-2 py-0.5 rounded-lg border border-slate-200 shadow-xs select-all">
+                      <span className="font-mono font-extrabold text-[#1A1A2E] tracking-wider text-xs">9920194857</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyAccountNumber}
+                        className="text-slate-450 hover:text-[#0F3460] hover:scale-105 active:scale-95 transition cursor-pointer p-1 rounded-md hover:bg-slate-200"
+                        title="Copy Account Number"
+                        id="copy-account-num-btn"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center py-0.5 border-b border-dashed border-slate-200 pb-2">
+                    <span className="text-slate-400 font-medium font-sans">Account Name</span>
+                    <span className="font-extrabold text-[#1A1A2E] text-right font-sans">Pablologs Escrow Funding Ltd</span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-0.5">
+                    <span className="text-slate-400 font-medium font-sans">Transfer Amount</span>
+                    <span className="font-extrabold text-[#E94560] font-mono">₦{simulatedAmount.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-amber-50/50 border border-amber-200/50 rounded-xl text-[9px] text-amber-800 font-medium leading-relaxed font-sans flex items-start gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-600 mt-0.5" />
+                  <span>Once transfer is completed, click <b>"I've Sent the Money"</b> below to initiate automated sandbox credit clearance.</span>
+                </div>
+              </div>
+            )}
 
             {/* Simulated verification actions */}
             <div className="flex gap-2 pt-3">
@@ -500,7 +625,7 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
                   setShowSandboxGateway(false);
                   triggerAlert('Transaction cancelled in sandbox simulator', 'info');
                 }}
-                className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-xl text-xs font-medium cursor-pointer"
+                className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-xl text-xs font-semibold cursor-pointer max-h-[44px]"
               >
                 Cancel payment
               </button>
@@ -508,21 +633,21 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
                 type="button"
                 onClick={submitSimulatedPayment}
                 disabled={isFunding}
-                className="flex-1 py-2.5 bg-emerald-70 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer flex items-center justify-center gap-1 min-h-[44px]"
+                className="flex-1 py-2.5 bg-emerald-70 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
               >
                 {isFunding ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
                   <>
                     <CheckCircle className="w-3.5 h-3.5" />
-                    Authorize Payment
+                    {sandboxTab === 'card' ? 'Authorize Payment' : "I've Sent the Money"}
                   </>
                 )}
               </button>
             </div>
             
             <div className="flex items-center gap-1 text-[8.5px] text-slate-400 font-sans justify-center pt-1 border-t border-slate-100">
-              <ShieldAlert className="w-3 h-3 text-slate-400" />
+              <ShieldAlert className="w-3 h-3 text-slate-400 font-sans" />
               <span>Sandbox payment secure local decryption protocol enabled.</span>
             </div>
 

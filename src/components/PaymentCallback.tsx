@@ -258,8 +258,35 @@ export default function PaymentCallback() {
                   </span>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(releasedCredentials);
-                      alert('Account credentials saved to your clipboard!');
+                      const textToCopy = releasedCredentials;
+                      try {
+                        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                          navigator.clipboard.writeText(textToCopy);
+                          alert('Account credentials saved to your clipboard!');
+                        } else {
+                          throw new Error('Fallback needed');
+                        }
+                      } catch (err) {
+                        const textArea = document.createElement('textarea');
+                        textArea.value = textToCopy;
+                        textArea.style.top = '0';
+                        textArea.style.left = '0';
+                        textArea.style.position = 'fixed';
+                        textArea.style.opacity = '0';
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        let success = false;
+                        try {
+                          success = document.execCommand('copy');
+                        } catch (e) {}
+                        document.body.removeChild(textArea);
+                        if (success) {
+                          alert('Account credentials saved to your clipboard!');
+                        } else {
+                          alert('Copy Failed');
+                        }
+                      }
                     }}
                     className="text-[10px] hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-bold cursor-pointer transition border border-emerald-400/20"
                   >
