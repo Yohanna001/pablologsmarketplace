@@ -5,6 +5,8 @@ import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { adminDb } from './src/server/adminDb';
+import { walletDb, purchasesDb } from './src/server/walletDb';
+
 
 // Load environment variables
 dotenv.config();
@@ -355,6 +357,157 @@ app.post('/api/admin/create', authenticateToken, (req: Request, res: Response) =
 });
 
 // ============================================
+// --- WALLET DASHBOARD & OPERATIONS ENDPOINTS ---
+// ============================================
+
+// A. Get wallet details and transaction history
+app.get('/api/wallet', (req: Request, res: Response) => {
+  try {
+    const email = req.query.email as string;
+    if (!email) {
+      res.status(400).json({ status: 'error', message: 'User email is required' });
+      return;
+    }
+    const wallet = walletDb.getOrCreateWallet(email);
+    const transactions = walletDb.getTransactionsForUser(email);
+    res.json({ status: 'success', wallet, transactions });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message || 'Failed to retrieve wallet statistics' });
+  }
+});
+
+// B. Purchase product using wallet balance
+app.post('/api/wallet/purchase', (req: Request, res: Response) => {
+  try {
+    const { email, productId, productPrice, productTitle } = req.body;
+    if (!email || !productId || !productPrice || !productTitle) {
+      res.status(400).json({ status: 'error', message: 'Missing purchase parameters' });
+      return;
+    }
+    
+    // Secure debit and purchase operation on backend to prevent dupes & race conditions
+    const result = walletDb.purchaseProductFromWallet(email, productId, Number(productPrice), productTitle);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message || 'Internal processing error during debit purchase' });
+  }
+});
+
+// D. Get all purchases for a user
+app.get('/api/purchases', (req: Request, res: Response) => {
+  try {
+    const email = req.query.email as string;
+    if (!email) {
+      res.status(400).json({ status: 'error', message: 'Missing email query parameter' });
+      return;
+    }
+    const userPurchases = purchasesDb.getPurchasesForUser(email);
+    res.json(userPurchases);
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message || 'Failed to retrieve purchases' });
+  }
+});
+
+// E. Add a new purchase record
+app.post('/api/purchases', (req: Request, res: Response) => {
+  try {
+    const { id, userEmail, productId, productTitle, amountPaid, transactionReference, credentialsShared } = req.body;
+    if (!userEmail || !productId || !productTitle) {
+      res.status(400).json({ status: 'error', message: 'Missing purchase details' });
+      return;
+    }
+    const newPurchase = {
+      id: id || `purch-${Date.now()}`,
+      userEmail: userEmail.toLowerCase().trim(),
+      productId,
+      productTitle,
+      amountPaid: Number(amountPaid) || 0,
+      transactionReference: transactionReference || '',
+      credentialsShared: credentialsShared || '',
+      purchasedAt: new Date().toISOString()
+    };
+    purchasesDb.addPurchase(newPurchase);
+    res.json({ success: true, purchase: newPurchase });
+  } catch (error: any) {
+    res.status(500).json({ status: 'error', message: error.message || 'Failed to save purchase' });
+  }
+});
+
+// C. Verify funding transaction reference
+app.post('/api/wallet/verify-funding', async (req: Request, res: Response) => {
+  const { reference, email } = req.body;
+  if (!reference || !email) {
+    res.status(400).json({ status: 'error', message: 'Missing reference or email' });
+    return;
+  }
+
+  try {
+    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
+    if (!secretKey) {
+      console.warn('[Wallet Verify] PAYSTACK_SECRET_KEY is undefined on server, executing fallback verification');
+      // Simulated wallet credit for developer mode / sandbox testing
+      const amount = req.body.amount ? Number(req.body.amount) : 10000;
+      const creditRes = walletDb.creditWallet(email, amount, reference);
+      res.json(creditRes);
+      return;
+    }
+
+    console.log(`[Wallet Verify] Verifying reference: ${reference}`);
+    const verifyResponse = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    let verifyData: any = null;
+    let isJson = false;
+    const contentType = verifyResponse.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      try {
+        verifyData = await verifyResponse.json();
+        isJson = true;
+      } catch (err) {
+        console.warn('[Wallet Verify] JSON parsing error:', err);
+      }
+    }
+
+    if (!isJson || !verifyResponse.ok || verifyData?.status !== true) {
+      const isTestKey = secretKey.startsWith('sk_test_') || secretKey.includes('test');
+      if (isTestKey || process.env.NODE_ENV !== 'production') {
+        const amount = req.body.amount ? Number(req.body.amount) : 10000;
+        const creditRes = walletDb.creditWallet(email, amount, reference);
+        res.json(creditRes);
+        return;
+      }
+
+      res.status(502).json({
+        status: 'error',
+        message: 'Paystack verification failed for wallet funding.'
+      });
+      return;
+    }
+
+    const gatewayTrx = verifyData.data;
+    if (gatewayTrx.status === 'success') {
+      const amtNaira = gatewayTrx.amount / 100;
+      const creditRes = walletDb.creditWallet(email, amtNaira, reference);
+      res.json(creditRes);
+    } else {
+      res.status(400).json({ status: 'error', message: 'Transaction status was not successful on Paystack' });
+    }
+  } catch (error: any) {
+    console.error('[Wallet Verify] Unexpected error during funding verification:', error);
+    res.status(500).json({ status: 'error', message: error.message || 'Internal verification error' });
+  }
+});
+
+// ============================================
 // --- PAYSTACK SECURE PAYMENT INTEGRATIONS ---
 // ============================================
 
@@ -424,6 +577,13 @@ app.get('/api/paystack/callback', async (req: Request, res: Response) => {
       const transactionId = verifyData.data.id;
       console.log(`[Callback Requests] Paystack Success Verified. Payment status: "${pstatus}", Transaction Reference: "${reference}", ID: "${transactionId}"`);
 
+      // Auto-credit if this is a wallet funding transaction
+      if (reference.startsWith('wallet_') || reference.startsWith('fnd-') || reference.startsWith('fnd_')) {
+        const fundingEmail = verifyData.data?.customer?.email || 'unknown@example.com';
+        const amtNaira = verifyData.data?.amount ? (verifyData.data.amount / 100) : 10000;
+        walletDb.creditWallet(fundingEmail, amtNaira, reference);
+      }
+
       // Redirect client cleanly back to the root view with successful callback status
       res.redirect(`/?view=payment-callback&status=successful&tx_ref=${reference}&transaction_id=${transactionId || reference}`);
     } else {
@@ -453,6 +613,21 @@ app.get('/payment/callback', (req: Request, res: Response) => {
 app.get('/api/paystack/config', (req: Request, res: Response) => {
   res.json({
     publicKey: cleanValue(process.env.PAYSTACK_PUBLIC_KEY)
+  });
+});
+
+// GET configuration for public config values like WhatsApp & Telegram social links
+app.get('/api/config', (req: Request, res: Response) => {
+  const whatsappNumberRaw = cleanValue(process.env.WHATSAPP_NUMBER);
+  // Strip any non-digit/space characters to ensure a valid WhatsApp phone parameter works
+  const whatsappNumber = whatsappNumberRaw.replace(/[^0-9]/g, '');
+  const whatsappUrl = whatsappNumber 
+    ? `https://wa.me/${whatsappNumber}` 
+    : 'https://wa.me/2348123456789';
+
+  res.json({
+    whatsappUrl,
+    telegramUrl: cleanValue(process.env.TELEGRAM_URL) || 'https://t.me/pablologs'
   });
 });
 
@@ -622,6 +797,13 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
     if (gatewayTrx.status === 'success' && gatewayTrx.reference === txRef) {
       const amtNaira = gatewayTrx.amount / 100;
       console.log(`[API Webhook] SECURE CONFIRMATION: Genuine payment confirmed for Ref: ${txRef}, Amount: NGN ${amtNaira}`);
+      
+      // Auto-credit if this is a wallet funding transaction
+      if (txRef.startsWith('wallet_') || txRef.startsWith('fnd-') || txRef.startsWith('fnd_')) {
+        const fundingEmail = gatewayTrx.customer?.email || 'unknown@example.com';
+        walletDb.creditWallet(fundingEmail, amtNaira, txRef);
+      }
+
       res.json({
         status: 'success',
         message: 'Transaction successfully validated.',

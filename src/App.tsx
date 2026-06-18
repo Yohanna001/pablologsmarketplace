@@ -11,6 +11,7 @@ import Footer from './components/Footer';
 import AuthModal from './components/AuthModal';
 import Marketplace from './components/Marketplace';
 import CheckoutModal from './components/CheckoutModal';
+import WalletDashboard from './components/WalletDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import MerchantApplicationModal from './components/MerchantApplicationModal';
 import { db, formatNaira } from './data';
@@ -18,7 +19,8 @@ import { User, ProductListing, Order } from './types';
 import { 
   ShieldCheck, ShoppingCart, UserCheck, Key, Ticket, CreditCard, 
   HelpCircle, Trash2, ArrowRight, UserPlus, Sparkles, RefreshCcw, Database, X, Lock,
-  Search, ArrowUpDown, Filter, Calendar, Home, ShoppingBag, User as UserIcon, LogOut, Settings
+  Search, ArrowUpDown, Filter, Calendar, Home, ShoppingBag, User as UserIcon, LogOut, Settings, Wallet,
+  MessageCircle, Send
 } from 'lucide-react';
 import AdminLogin from './components/AdminLogin';
 import PaymentCallback from './components/PaymentCallback';
@@ -40,8 +42,22 @@ export default function App() {
 
   // Navigation & Pathname Physical Routing
   const [currentPath, setCurrentPath] = useState(location.pathname);
-  const [view, setView] = useState<'landing' | 'marketplace' | 'admin' | 'payment-callback' | 'deployment-assets' | 'account' | 'profile'>('landing');
+  const [view, setView] = useState<'landing' | 'marketplace' | 'admin' | 'payment-callback' | 'deployment-assets' | 'account' | 'profile' | 'wallet'>('landing');
   const [activeNavTab, setActiveNavTab] = useState('home');
+
+  // Dynamic floating chat link environment variables fetched from backend config
+  const [whatsappUrl, setWhatsappUrl] = useState('https://wa.me/2348123456789');
+  const [telegramUrl, setTelegramUrl] = useState('https://t.me/pablologs');
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.whatsappUrl) setWhatsappUrl(data.whatsappUrl);
+        if (data.telegramUrl) setTelegramUrl(data.telegramUrl);
+      })
+      .catch(err => console.warn('[App Config] Could not fetch social links from `/api/config`:', err));
+  }, []);
 
   // Synchronize currentPath state when react-router-dom location updates
   useEffect(() => {
@@ -125,6 +141,7 @@ export default function App() {
       rel === '/' || 
       rel === '/index.html' || 
       rel === '/marketplace' || 
+      rel === '/wallet' || 
       rel === '/deployment' || 
       rel === '/deployment-assets' || 
       rel === '/admin-login' || 
@@ -147,6 +164,9 @@ export default function App() {
     } else if (rel === '/marketplace') {
       setView('marketplace');
       setActiveNavTab('marketplace');
+    } else if (rel === '/wallet') {
+      setView('wallet');
+      setActiveNavTab('wallet');
     } else if (rel === '/deployment' || rel === '/deployment-assets') {
       setView('deployment-assets');
       setActiveNavTab('deployment');
@@ -159,7 +179,7 @@ export default function App() {
   }, [currentPath]);
 
   // Unified view + path change handler
-  const handleViewChange = (v: 'landing' | 'marketplace' | 'admin' | 'deployment-assets' | 'account' | 'profile') => {
+  const handleViewChange = (v: 'landing' | 'marketplace' | 'admin' | 'deployment-assets' | 'account' | 'profile' | 'wallet') => {
     setView(v);
     if (v === 'landing') {
       setActiveNavTab('home');
@@ -177,6 +197,9 @@ export default function App() {
       setActiveNavTab('account');
     } else if (v === 'profile') {
       setActiveNavTab('profile');
+    } else if (v === 'wallet') {
+      setActiveNavTab('wallet');
+      navigateTo('/wallet');
     }
   };
 
@@ -412,6 +435,11 @@ export default function App() {
     }).catch(e => console.error('Supabase synchronization error:', e));
   }, []);
 
+  // Sync purchase memory on profile changes or initial mount
+  useEffect(() => {
+    refreshDatabaseState();
+  }, [currentUser]);
+
   // Check for purchases drawer URL parameters to open it automatically upon checkout success
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -476,10 +504,54 @@ export default function App() {
   }, []);
 
   // Synchronize state and trigger recalculations
-  const refreshDatabaseState = () => {
+  const refreshDatabaseState = async () => {
     setListings(db.getProducts());
-    setOrders(db.getOrders());
     setUsers(db.getUsers());
+
+    const localOrders = db.getOrders();
+    const activeSess = localStorage.getItem('pm_active_user');
+    const runningUser = activeSess ? JSON.parse(activeSess) : currentUser;
+
+    if (runningUser?.email) {
+      try {
+        const res = await fetch(`/api/purchases?email=${encodeURIComponent(runningUser.email)}`);
+        if (res.ok) {
+          const serverPurchases: any[] = await res.json();
+          const mappedPurchases: Order[] = serverPurchases.map(p => ({
+            id: p.id,
+            buyerEmail: p.userEmail,
+            buyerName: runningUser.name || 'Verified Buyer',
+            buyerPhone: runningUser.phone || '+2348000000000',
+            productId: p.productId,
+            productTitle: p.productTitle,
+            productPlatform: 'Digital',
+            amount: p.amountPaid,
+            status: 'delivered',
+            paymentGateway: 'paystack',
+            credentialsShared: p.credentialsShared,
+            createdAt: p.purchasedAt
+          }));
+
+          const merged = [...localOrders];
+          mappedPurchases.forEach(mp => {
+            const idx = merged.findIndex(o => o.id === mp.id || (o.productId === mp.productId && o.buyerEmail === mp.buyerEmail));
+            if (idx !== -1) {
+              merged[idx] = { ...merged[idx], ...mp };
+            } else {
+              merged.push(mp);
+            }
+          });
+          setOrders(merged);
+        } else {
+          setOrders(localOrders);
+        }
+      } catch (err) {
+        console.error('[Purchases Server Sync Error]', err);
+        setOrders(localOrders);
+      }
+    } else {
+      setOrders(localOrders);
+    }
   };
 
   // Auth Callbacks
@@ -499,6 +571,13 @@ export default function App() {
     localStorage.removeItem('pm_active_user');
     setView('landing');
     triggerAlert('You have signed out of your portal.', 'info');
+  };
+
+  const handleUpdateProfile = (updated: User) => {
+    setCurrentUser(updated);
+    localStorage.setItem('pm_active_user', JSON.stringify(updated));
+    setUsers(prev => prev.map(u => u.email === updated.email ? updated : u));
+    triggerAlert('Your profile was updated successfully!', 'success');
   };
 
   // Payments callbacks
@@ -608,6 +687,10 @@ export default function App() {
         onGoToHome={() => handleViewChange('landing')}
         onBecomeMerchant={() => setShowMerchantApply(true)}
         onGoToDeployment={() => handleViewChange('deployment-assets')}
+        onGoToWallet={() => handleViewChange('wallet')}
+        onUpdateProfile={handleUpdateProfile}
+        purchasedOrders={buyerOrders}
+        onViewPurchase={(order) => setSelectedViewOrder(order)}
       />
 
       {/* Admin quick access sub-header strip for logged-in operators */}
@@ -687,6 +770,13 @@ export default function App() {
               currentUser={currentUser}
               onBuyNow={(prod) => setCheckoutProduct(prod)}
               onOpenAuth={(v) => setAuthModal({ isOpen: true, view: v })}
+              purchasedProductIds={buyerOrders.map(o => o.productId)}
+              onViewProduct={(productId) => {
+                const matched = buyerOrders.find(o => o.productId === productId);
+                if (matched) {
+                  setSelectedViewOrder(matched);
+                }
+              }}
             />
           </div>
         )}
@@ -884,115 +974,13 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 7: USER PROFILE & SETTINGS ENVIRONMENT */}
-        {view === 'profile' && (
-          <div id="user-profile-view-wrapper" className="animate-[fadeIn_0.3s_ease] max-w-md mx-auto p-4 space-y-4 pb-24">
-            
-            {/* Upper Profile card */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm text-left relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#0F3460]" />
-              
-              <div className="flex items-center gap-3.5 pt-1.5">
-                <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[#1A1A2E] font-bold text-lg">
-                  {currentUser ? currentUser.name.charAt(0).toUpperCase() : '?'}
-                </div>
-                <div>
-                  <h3 className="font-heading font-bold text-base text-[#1A1A2E]">
-                    {currentUser ? currentUser.name : 'Guest Account'}
-                  </h3>
-                  <p className="text-xs text-slate-400 font-sans">
-                    {currentUser ? currentUser.email : 'Unauthenticated session'}
-                  </p>
-                </div>
-              </div>
-
-              {currentUser && (
-                <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 font-sans">Authorized Role</span>
-                  <span className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-800 rounded-full font-bold text-[10.5px]">
-                    {currentUser.role}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Login / Developer Tool Switcher inside settings */}
-            {!currentUser ? (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3.5 text-left">
-                <div className="space-y-1">
-                  <h4 className="font-bold text-xs uppercase text-slate-500 tracking-wider font-sans">Account Gateways</h4>
-                  <p className="text-xs text-slate-400 font-sans">
-                    Toggle simulation profiles or sign in to configure digital log purchases.
-                  </p>
-                </div>
-
-                <div className="space-y-2 mt-2">
-                  <button
-                    onClick={() => setAuthModal({ isOpen: true, view: 'login' })}
-                    className="w-full py-2.5 bg-[#0F3460] hover:bg-[#16213E] text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
-                  >
-                    <UserIcon className="w-4 h-4" />
-                    Sign In to Pablologs
-                  </button>
-                  <button
-                    onClick={() => setAuthModal({ isOpen: true, view: 'signup' })}
-                    className="w-full py-2.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
-                  >
-                    <UserPlus className="w-4 h-4 text-[#0F3460]" />
-                    Register a New Account
-                  </button>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 space-y-2">
-                  <span className="text-[9px] font-extrabold text-[#4A4A6A] tracking-wider uppercase block">⚡ COMPRESSED TESTING ACCOUNTS SWITCHER</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => {
-                        const matched = users.find(u => u.email === 'YohannaIsaac90@gmail.com');
-                        if (matched) handleLogin(matched);
-                      }}
-                      className="py-2.5 px-3 bg-slate-50 hover:bg-slate-100 text-[10.5px] text-[#0F3460] font-bold rounded-xl border border-slate-200 shadow-xs text-center transition cursor-pointer"
-                    >
-                      👤 Isaac Yohanna
-                    </button>
-                    <button
-                      onClick={() => {
-                        const matched = users.find(u => u.email === 'admin@pablologs.com');
-                        if (matched) handleLogin(matched);
-                      }}
-                      className="py-2.5 px-3 bg-slate-50 hover:bg-slate-100 text-[10.5px] text-slate-800 font-bold rounded-xl border border-slate-200 shadow-xs text-center transition cursor-pointer"
-                    >
-                      👑 Admin Operator
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3.5 text-left">
-                <h4 className="font-extrabold text-xs uppercase text-slate-500 tracking-wider font-sans">Session Utilities</h4>
-                
-                <div className="space-y-2">
-                  {currentUser.role === 'admin' && (
-                    <button
-                      onClick={() => handleViewChange('admin')}
-                      className="w-full py-2.5 bg-[#1A1A2E] hover:bg-[#16213E] text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
-                    >
-                      <Database className="w-4 h-4 text-emerald-400" />
-                      Go to Admin Panel Dashboard
-                    </button>
-                  )}
-
-                  <button
-                    onClick={handleLogout}
-                    className="w-full py-2.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+        {/* VIEW 7: WALLET DASHBOARD */}
+        {view === 'wallet' && (
+          <WalletDashboard
+            currentUser={currentUser}
+            triggerAlert={triggerAlert}
+            onRefreshOrders={refreshDatabaseState}
+          />
         )}
 
         {/* VIEW 3: SECURE PHYSICAL ADMIN PATH ROUTES */}
@@ -1090,6 +1078,14 @@ export default function App() {
           currentUser={currentUser}
           onClose={() => setCheckoutProduct(null)}
           onPaymentSuccess={handlePaymentSuccess}
+          onOpenFunding={() => {
+            setCheckoutProduct(null);
+            setView('wallet');
+            setTimeout(() => {
+              const trigger = document.getElementById('fund-wallet-trigger');
+              if (trigger) trigger.click();
+            }, 300);
+          }}
         />
       )}
 
@@ -1471,16 +1467,52 @@ export default function App() {
           <span className="text-[10px] mt-1 font-medium tracking-tight">Account</span>
         </button>
 
-        {/* Tab 4: Profile */}
+        {/* Tab 4: Wallet */}
         <button
-          onClick={() => handleViewChange('profile')}
+          onClick={() => {
+            if (!currentUser) {
+              setAuthModal({ isOpen: true, view: 'login' });
+            } else {
+              handleViewChange('wallet');
+            }
+          }}
           className={`flex flex-col items-center justify-center flex-1 py-1 h-full transition-colors cursor-pointer ${
-            view === 'profile' ? 'text-[#E94560]' : 'text-slate-400 hover:text-white'
+            view === 'wallet' ? 'text-[#E94560]' : 'text-slate-400 hover:text-white'
           }`}
         >
-          <UserIcon className={`w-5 h-5 transition-transform ${view === 'profile' ? 'scale-110 text-[#E94560]' : ''}`} />
-          <span className="text-[10px] mt-1 font-medium tracking-tight">Profile</span>
+          <Wallet className={`w-5 h-5 transition-transform ${view === 'wallet' ? 'scale-110 text-[#E94560]' : ''}`} />
+          <span className="text-[10px] mt-1 font-medium tracking-tight">Wallet</span>
         </button>
+      </div>
+
+      {/* FLOATING ACTION BRAND RECOVERY OVERLAYS */}
+      <div 
+        id="floating-support-chat-anchors"
+        className="fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-40 flex flex-col gap-3 transition-all select-none"
+      >
+        {/* Telegram channel trigger */}
+        <a
+          href={telegramUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          id="telegram-floating-trigger"
+          className="w-11 h-11 rounded-full bg-[#0088cc] hover:bg-[#0077b5] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition transform hover:scale-105 active:scale-95 cursor-pointer border border-white/10"
+          title="Join Pablologs Telegram"
+        >
+          <Send className="w-5 h-5 fill-white" />
+        </a>
+
+        {/* WhatsApp helpline trigger */}
+        <a
+          href={whatsappUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          id="whatsapp-floating-trigger"
+          className="w-11 h-11 rounded-full bg-[#25D366] hover:bg-[#20ba5a] text-white flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition transform hover:scale-105 active:scale-95 cursor-pointer border border-white/10"
+          title="Direct WhatsApp Helpline Support"
+        >
+          <MessageCircle className="w-5 h-5 fill-white" />
+        </a>
       </div>
 
     </div>

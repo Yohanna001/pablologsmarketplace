@@ -6,6 +6,7 @@ export interface User {
   email: string;
   role: UserRole;
   isApprovedMerchant?: boolean; // Merchants must be approved by admin
+  phone?: string;
   createdAt: string;
 }
 

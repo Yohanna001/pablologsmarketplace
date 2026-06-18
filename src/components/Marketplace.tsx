@@ -68,9 +68,18 @@ interface MarketplaceProps {
   currentUser: User | null;
   onBuyNow: (product: ProductListing) => void;
   onOpenAuth: (view: 'login' | 'signup') => void;
+  purchasedProductIds?: string[];
+  onViewProduct?: (productId: string) => void;
 }
 
-export default function Marketplace({ listings, currentUser, onBuyNow, onOpenAuth }: MarketplaceProps) {
+export default function Marketplace({ 
+  listings, 
+  currentUser, 
+  onBuyNow, 
+  onOpenAuth,
+  purchasedProductIds = [],
+  onViewProduct
+}: MarketplaceProps) {
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('All');
@@ -312,19 +321,32 @@ export default function Marketplace({ listings, currentUser, onBuyNow, onOpenAut
 
                   {/* Checkout Activation bottom bar */}
                   <div className="p-3 bg-slate-50 border-t border-[#E0E0E0]/30">
-                    <button
-                      id={`buy-btn-${item.id}`}
-                      onClick={() => {
-                        if (!currentUser) {
-                          onOpenAuth('login');
-                        } else {
-                          onBuyNow(item);
-                        }
-                      }}
-                      className="w-full py-2 bg-[#0F3460] hover:bg-[#16213E] text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 min-h-[40px]"
-                    >
-                      Buy Now
-                    </button>
+                    {purchasedProductIds.includes(item.id) ? (
+                      <button
+                        id={`view-btn-${item.id}`}
+                        onClick={() => {
+                          if (onViewProduct) onViewProduct(item.id);
+                        }}
+                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 min-h-[40px] cursor-pointer"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-white" />
+                        View Product
+                      </button>
+                    ) : (
+                      <button
+                        id={`buy-btn-${item.id}`}
+                        onClick={() => {
+                          if (!currentUser) {
+                            onOpenAuth('login');
+                          } else {
+                            onBuyNow(item);
+                          }
+                        }}
+                        className="w-full py-2 bg-[#0F3460] hover:bg-[#16213E] text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 min-h-[40px] cursor-pointer"
+                      >
+                        Buy Now
+                      </button>
+                    )}
                   </div>
 
                 </div>
