@@ -3,6 +3,7 @@ import path from 'path';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { adminDb } from './src/server/adminDb';
 import { walletDb, purchasesDb } from './src/server/walletDb';
@@ -20,8 +21,12 @@ const cleanValue = (val: string | undefined): string => {
 const app = express();
 const PORT = 3000;
 
-// Security and parser middleware
-app.use(express.json());
+// Security and parser middleware with raw body preservation for Paystack signatures
+app.use(express.json({
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 // Load basic secrets with defaults
 const JWT_SECRET = process.env.JWT_SECRET || 'purelogs_super_secret_jwt_key_2026_rfv_987';
@@ -461,7 +466,7 @@ app.post('/api/purchases', async (req: Request, res: Response) => {
 });
 
 // C. Verify funding transaction reference
-app.post('/api/wallet/verify-funding', async (req: Request, res: Response) => {
+app.post(['/api/wallet/verify-funding', '/api/verify-funding', '/api/paystack/verify-funding'], async (req: Request, res: Response) => {
   const { reference, email } = req.body;
   if (!reference || !email) {
     res.status(400).json({ status: 'error', message: 'Missing reference or email' });
@@ -748,6 +753,32 @@ app.post('/api/paystack/initialize-payment', async (req: Request, res: Response)
 app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
   try {
     await walletDb.syncFromSupabase();
+    
+    // 2. Verify Paystack signature if signature header is present
+    const signature = req.headers['x-paystack-signature'] as string;
+    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
+
+    if (signature) {
+      if (!secretKey) {
+        console.error('[API Webhook] Security Warning: x-paystack-signature header received, but PAYSTACK_SECRET_KEY is undefined on server.');
+        res.status(500).json({ status: 'error', message: 'Paystack Secret Key is missing' });
+        return;
+      }
+
+      const rawBody = (req as any).rawBody ? (req as any).rawBody.toString('utf8') : JSON.stringify(req.body);
+      const computedHash = crypto
+        .createHmac('sha512', secretKey)
+        .update(rawBody)
+        .digest('hex');
+
+      if (computedHash !== signature) {
+        console.warn('[API Webhook] Security Warning: Invalid Paystack webhook signature detected!');
+        res.status(401).json({ status: 'error', message: 'Invalid paystack signature' });
+        return;
+      }
+      console.log('[API Webhook] Webhook signature verified successfully via HMAC SHA512.');
+    }
+
     const payload = req.body;
     console.log('[API Webhook] Paystack hook payload received. Event:', payload?.event || req.body?.data?.status);
 
@@ -760,7 +791,6 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
       return;
     }
 
-    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
     if (!secretKey) {
       console.error('[API Webhook] PAYSTACK_SECRET_KEY is undefined on server.');
       res.status(500).json({ status: 'error', message: 'PAYSTACK_SECRET_KEY is undefined on server.' });
@@ -834,12 +864,13 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
 
     const gatewayTrx = verifyData.data;
 
-    // Direct validation checks
+    // 3. Verify transaction status
     if (gatewayTrx.status === 'success' && gatewayTrx.reference === txRef) {
       const amtNaira = gatewayTrx.amount / 100;
       console.log(`[API Webhook] SECURE CONFIRMATION: Genuine payment confirmed for Ref: ${txRef}, Amount: NGN ${amtNaira}`);
       
-      // Auto-credit if this is a wallet funding transaction
+      // 4. Credit user's wallet
+      // 5. Save transaction records / 6. Prevent duplicate credits (handled within creditWallet)
       let walletRes = null;
       if (txRef.startsWith('wallet_') || txRef.startsWith('fnd-') || txRef.startsWith('fnd_')) {
         const fundingEmail = gatewayTrx.customer?.email || 'unknown@example.com';
@@ -872,6 +903,13 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
 // --- DEPLOYMENT / SERVER INTEGRATION FLOW ---
 
 async function startServer() {
+  // If running on Vercel Serverless environment, skip starting the local Express server listening on PORT
+  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL;
+  if (isVercel) {
+    console.log('[Server] Vercel Serverless Environment detected. Skipping listener binding and Vite static middleware.');
+    return;
+  }
+
   // Vite integration for dev vs prod static assets
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
