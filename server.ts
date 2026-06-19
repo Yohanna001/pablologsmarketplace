@@ -362,25 +362,31 @@ app.post('/api/admin/create', authenticateToken, (req: Request, res: Response) =
 
 // A. Get wallet details and transaction history
 app.get('/api/wallet', (req: Request, res: Response) => {
+  const email = req.query.email as string;
+  console.log(`[Wallet API GET] Retrieve request received for user key: "${email}" (IP: ${req.ip})`);
   try {
-    const email = req.query.email as string;
     if (!email) {
+      console.warn('[Wallet API GET] Request rejected: missing email query parameter');
       res.status(400).json({ status: 'error', message: 'User email is required' });
       return;
     }
     const wallet = walletDb.getOrCreateWallet(email);
     const transactions = walletDb.getTransactionsForUser(email);
+    console.log(`[Wallet API GET] Successfully synchronized. User: ${email}, Balance: ₦${wallet.balance}, Transactions: ${transactions.length}`);
     res.json({ status: 'success', wallet, transactions });
   } catch (error: any) {
+    console.error(`[Wallet API GET Error] Failure trying to find or seed user "${email}":`, error);
     res.status(500).json({ status: 'error', message: error.message || 'Failed to retrieve wallet statistics' });
   }
 });
 
 // B. Purchase product using wallet balance
 app.post('/api/wallet/purchase', (req: Request, res: Response) => {
+  const { email, productId, productPrice, productTitle } = req.body;
+  console.log(`[Wallet API Purchase] Debit request received. User: "${email}", ProductId: "${productId}", Price: ₦${productPrice}, Title: "${productTitle}"`);
   try {
-    const { email, productId, productPrice, productTitle } = req.body;
     if (!email || !productId || !productPrice || !productTitle) {
+      console.warn('[Wallet API Purchase] Request rejected: missing purchase parameters', req.body);
       res.status(400).json({ status: 'error', message: 'Missing purchase parameters' });
       return;
     }
@@ -388,35 +394,44 @@ app.post('/api/wallet/purchase', (req: Request, res: Response) => {
     // Secure debit and purchase operation on backend to prevent dupes & race conditions
     const result = walletDb.purchaseProductFromWallet(email, productId, Number(productPrice), productTitle);
     if (result.success) {
+      console.log(`[Wallet API Purchase] SUCCESS: Deducted ₦${Number(productPrice)} from user "${email}". New balance: ₦${result.balance}`);
       res.json(result);
     } else {
+      console.warn(`[Wallet API Purchase] REJECTED: User "${email}" has insufficient funds or validation failed. Details: "${result.message}"`);
       res.status(400).json(result);
     }
   } catch (error: any) {
+    console.error(`[Wallet API Purchase Error] Failed processing transaction for user "${email}":`, error);
     res.status(500).json({ status: 'error', message: error.message || 'Internal processing error during debit purchase' });
   }
 });
 
 // D. Get all purchases for a user
 app.get('/api/purchases', (req: Request, res: Response) => {
+  const email = req.query.email as string;
+  console.log(`[Purchases API GET] Fetching purchases folder list for user: "${email}"`);
   try {
-    const email = req.query.email as string;
     if (!email) {
+      console.warn('[Purchases API GET] Request rejected: missing email query parameter');
       res.status(400).json({ status: 'error', message: 'Missing email query parameter' });
       return;
     }
     const userPurchases = purchasesDb.getPurchasesForUser(email);
+    console.log(`[Purchases API GET] Match complete. User: "${email}" has ${userPurchases.length} total purchase records.`);
     res.json(userPurchases);
   } catch (error: any) {
+    console.error(`[Purchases API GET Error] Failed fetching user list "${email}":`, error);
     res.status(500).json({ status: 'error', message: error.message || 'Failed to retrieve purchases' });
   }
 });
 
 // E. Add a new purchase record
 app.post('/api/purchases', (req: Request, res: Response) => {
+  const { id, userEmail, productId, productTitle, amountPaid, transactionReference, credentialsShared } = req.body;
+  console.log(`[Purchases API POST] Writing purchase record. OrderId: "${id}", User: "${userEmail}", Product: "${productTitle}", Price: ₦${amountPaid}`);
   try {
-    const { id, userEmail, productId, productTitle, amountPaid, transactionReference, credentialsShared } = req.body;
     if (!userEmail || !productId || !productTitle) {
+      console.warn('[Purchases API POST] Request rejected: invalid or incomplete payload');
       res.status(400).json({ status: 'error', message: 'Missing purchase details' });
       return;
     }
@@ -431,8 +446,10 @@ app.post('/api/purchases', (req: Request, res: Response) => {
       purchasedAt: new Date().toISOString()
     };
     purchasesDb.addPurchase(newPurchase);
+    console.log(`[Purchases API POST] SUCCESS: Purchase record successfully registered on server disk. OrderId: "${newPurchase.id}"`);
     res.json({ success: true, purchase: newPurchase });
   } catch (error: any) {
+    console.error(`[Purchases API POST Error] Failed to write purchase record for user "${userEmail}":`, error);
     res.status(500).json({ status: 'error', message: error.message || 'Failed to save purchase' });
   }
 });
@@ -768,14 +785,24 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
 
       if (isSimulatedPayload && (isTestKey || process.env.NODE_ENV !== 'production')) {
         console.log(`[API Webhook] RESILIENT FALLBACK: Allowing local verification bypass for test transaction: ${txRef}`);
+        const fundingEmail = payload.data?.customer?.email || 'test-customer@example.com';
+        const amtNaira = payload.data?.amount ? (payload.data.amount / 100) : 10000;
+        
+        // Auto-credit immediately on verification success in sandbox mode
+        let walletRes = null;
+        if (txRef.startsWith('wallet_') || txRef.startsWith('fnd-') || txRef.startsWith('fnd_')) {
+          walletRes = walletDb.creditWallet(fundingEmail, amtNaira, txRef);
+        }
+
         res.json({
           status: 'success',
           message: 'Transaction verified via resilient sandbox fallback.',
+          walletBalance: walletRes ? walletRes.balance : undefined,
           transaction: {
             id: transactionId || `sim-${Math.floor(Math.random() * 10000000)}`,
             reference: txRef,
-            amount: (payload.data?.amount ? payload.data.amount / 100 : 100),
-            email: payload.data?.customer?.email || 'test-customer@example.com'
+            amount: amtNaira,
+            email: fundingEmail
           }
         });
         return;
@@ -799,14 +826,16 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
       console.log(`[API Webhook] SECURE CONFIRMATION: Genuine payment confirmed for Ref: ${txRef}, Amount: NGN ${amtNaira}`);
       
       // Auto-credit if this is a wallet funding transaction
+      let walletRes = null;
       if (txRef.startsWith('wallet_') || txRef.startsWith('fnd-') || txRef.startsWith('fnd_')) {
         const fundingEmail = gatewayTrx.customer?.email || 'unknown@example.com';
-        walletDb.creditWallet(fundingEmail, amtNaira, txRef);
+        walletRes = walletDb.creditWallet(fundingEmail, amtNaira, txRef);
       }
 
       res.json({
         status: 'success',
         message: 'Transaction successfully validated.',
+        walletBalance: walletRes ? walletRes.balance : undefined,
         transaction: {
           id: gatewayTrx.id,
           reference: txRef,
@@ -848,16 +877,11 @@ async function startServer() {
     });
   }
 
-  // Web containers and standard local development must listen on port 3000 to be reachable
-  const shouldListen = !process.env.VERCEL || process.env.NODE_ENV !== 'production' || process.env.PORT === '3000';
-  if (shouldListen) {
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server listening at http://0.0.0.0:${PORT} (shouldListen: ${shouldListen}, VERCEL: ${process.env.VERCEL})`);
-      console.log(`Default Super Admin seeded as admin@purelogsmartketaplace.com`);
-    });
-  } else {
-    console.log(`Server initialized but skipping direct listen under serverless context (VERCEL detected)`);
-  }
+  // Start Express server listening strictly on port 3000 to bind correctly in Web Containers and Cloud Run
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server listening on port ${PORT}`);
+    console.log(`Default Super Admin seeded as admin@purelogsmartketaplace.com`);
+  });
 }
 
 startServer();

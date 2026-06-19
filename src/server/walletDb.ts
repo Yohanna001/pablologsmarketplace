@@ -148,6 +148,13 @@ export const walletDb = {
     return transactions.some(t => t.paystackReference === reference);
   },
 
+  getEmailForPaystackReference(reference: string): string | null {
+    if (!reference) return null;
+    const transactions = this.getTransactions();
+    const found = transactions.find(t => t.paystackReference === reference);
+    return found ? found.userEmail : null;
+  },
+
   creditWallet(email: string, amount: number, reference: string): { success: boolean; message: string; balance?: number } {
     if (!email) return { success: false, message: 'Invalid email address' };
     if (amount <= 0) return { success: false, message: 'Funding amount must be greater than zero' };
@@ -156,14 +163,26 @@ export const walletDb = {
     const wallets = this.getWallets();
     const wallet = this.getOrCreateWallet(cleanEmail);
 
-    // Prevent duplicate credits from identical Paystack references
-    if (reference && this.hasPaystackReferenceBeenUsed(reference)) {
-      console.warn(`[Wallet DB] Blocked duplicate credit request for reference: ${reference}`);
-      return { 
-        success: false, 
-        message: 'This transaction reference has already been verified and credited.', 
-        balance: wallet.balance 
-      };
+    // Prevent duplicate credits from identical Paystack references, with smart self-owning fallback
+    if (reference) {
+      const existingOwner = this.getEmailForPaystackReference(reference);
+      if (existingOwner) {
+        if (existingOwner === cleanEmail) {
+          console.log(`[Wallet DB] Duplicate credit request: Reference ${reference} already credited to ${cleanEmail}. Returning cached success.`);
+          return { 
+            success: true, 
+            message: 'This transaction was already successfully verified and credited.', 
+            balance: wallet.balance 
+          };
+        } else {
+          console.warn(`[Wallet DB] Security Warning: Reference ${reference} already used by ${existingOwner}, but requested by ${cleanEmail}.`);
+          return { 
+            success: false, 
+            message: 'This transaction reference is already linked to another account.', 
+            balance: wallet.balance 
+          };
+        }
+      }
     }
 
     // Update wallet balance
