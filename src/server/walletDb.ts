@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { supabaseDb, isConfigured } from '../supabaseClient';
 
 export interface Wallet {
   userEmail: string;
@@ -244,6 +245,65 @@ export const walletDb = {
       balance: wallet.balance, 
       transactionId: txId 
     };
+  },
+
+  async syncFromSupabase() {
+    if (!isConfigured) return;
+    try {
+      console.log('[Wallet DB] Pulling down state from Supabase...');
+      const sWallets = await supabaseDb.getWallets();
+      if (sWallets) {
+        const walletsMap: Record<string, Wallet> = {};
+        for (const w of sWallets) {
+          walletsMap[w.user_email] = {
+            userEmail: w.user_email,
+            balance: Number(w.balance)
+          };
+        }
+        walletsCache = walletsMap;
+      }
+
+      const sTxs = await supabaseDb.getWalletTransactions();
+      if (sTxs) {
+        transactionsCache = sTxs;
+      }
+
+      const sPurchases = await supabaseDb.getPurchases();
+      if (sPurchases) {
+        purchasesCache = sPurchases;
+      }
+      console.log('[Wallet DB] Sync from Supabase complete. Wallets:', Object.keys(walletsCache || {}).length, 'Transactions:', (transactionsCache || []).length);
+    } catch (e) {
+      console.error('[Wallet DB] Sync from Supabase failed (ignoring for resilience):', e);
+    }
+  },
+
+  async syncToSupabase() {
+    if (!isConfigured) return;
+    try {
+      console.log('[Wallet DB] Pushing modified state to Supabase...');
+      // 1. Push all wallets in cache
+      if (walletsCache) {
+        for (const key of Object.keys(walletsCache)) {
+          await supabaseDb.saveWallet(walletsCache[key]);
+        }
+      }
+      // 2. Push all transactions in cache
+      if (transactionsCache) {
+        for (const tx of transactionsCache) {
+          await supabaseDb.saveWalletTransaction(tx);
+        }
+      }
+      // 3. Push all purchases in cache
+      if (purchasesCache) {
+        for (const p of purchasesCache) {
+          await supabaseDb.savePurchase(p);
+        }
+      }
+      console.log('[Wallet DB] Sync to Supabase complete.');
+    } catch (e) {
+      console.error('[Wallet DB] Sync to Supabase failed (ignoring for resilience):', e);
+    }
   }
 };
 

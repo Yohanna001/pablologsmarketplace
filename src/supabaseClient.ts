@@ -1,8 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { ProductListing, User, Order } from './types';
 
-let rawSupabaseUrl = (((import.meta as any).env?.VITE_SUPABASE_URL) || '').trim();
-const supabaseAnonKey = (((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || '').trim();
+let rawSupabaseUrl = (
+  (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) ||
+  ((import.meta as any).env?.VITE_SUPABASE_URL) || 
+  ''
+).trim();
+
+const supabaseAnonKey = (
+  (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) ||
+  ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || 
+  ''
+).trim();
 
 // Sanitize common copy-paste formatting errors
 if (rawSupabaseUrl) {
@@ -99,10 +108,45 @@ CREATE TABLE IF NOT EXISTS public.orders (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 4. Create Wallets Table
+CREATE TABLE IF NOT EXISTS public.wallets (
+  user_email TEXT PRIMARY KEY,
+  balance NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Create Wallet Transactions Table
+CREATE TABLE IF NOT EXISTS public.wallet_transactions (
+  id TEXT PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  type TEXT NOT NULL,
+  description TEXT,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  paystack_reference TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. Create Purchases Table
+CREATE TABLE IF NOT EXISTS public.purchases (
+  id TEXT PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  product_id TEXT,
+  product_title TEXT,
+  amount_paid NUMERIC,
+  transaction_reference TEXT,
+  credentials_shared TEXT,
+  purchased_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable all inserts and queries from front-end by disabling Row Level Security (RLS)
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wallets DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wallet_transactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.purchases DISABLE ROW LEVEL SECURITY;
 `;
 
 // Helper conversion functions (database snake_case to typescript camelCase)
@@ -139,6 +183,74 @@ export function stringToUuid(str: string): string {
   const p5 = hex3.slice(4, 8) + hex4.slice(0, 8);
 
   return `${p1}-${p2}-${p3}-${p4}-${p5}`.toLowerCase();
+}
+
+export function isMissingTableError(error: any): boolean {
+  if (!error) return false;
+  
+  // 1. Gather all individual properties that might describe the error
+  const propertiesToCheck = [
+    error.message,
+    error.code,
+    error.hint,
+    error.details,
+    error.statusText,
+    error.name,
+    typeof error === 'string' ? error : ''
+  ];
+  
+  // 2. Also try JSON.stringify recursively but prioritize distinct properties
+  try {
+    const stringified = JSON.stringify(error);
+    if (stringified && stringified !== '{}') {
+      propertiesToCheck.push(stringified);
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  // 3. Inspect keys of error object recursively in case it is structured
+  if (typeof error === 'object') {
+    for (const key of Object.keys(error)) {
+      try {
+        const val = error[key];
+        if (typeof val === 'string' || typeof val === 'number') {
+          propertiesToCheck.push(String(val));
+        } else if (val && typeof val === 'object') {
+          propertiesToCheck.push(val.message);
+          propertiesToCheck.push(val.code);
+          propertiesToCheck.push(val.details);
+        }
+      } catch (_) {}
+    }
+  }
+  
+  // 4. Combine them all into one search text
+  const combined = propertiesToCheck
+    .filter(val => typeof val === 'string' || typeof val === 'number')
+    .map(val => String(val).toLowerCase())
+    .join(' ');
+    
+  return (
+    combined.includes('42p01') ||
+    combined.includes('pgrst116') ||
+    combined.includes('does not exist') ||
+    combined.includes('relation') ||
+    combined.includes('undefined_table') ||
+    combined.includes('not found') ||
+    combined.includes('missing') ||
+    combined.includes('invalid relation') ||
+    combined.includes('fetch') ||
+    combined.includes('network') ||
+    combined.includes('block') ||
+    combined.includes('abort') ||
+    combined.includes('cors') ||
+    combined.includes('connection') ||
+    combined.includes('failed') ||
+    combined.includes('empty') ||
+    combined.includes('invalid api key') ||
+    combined.includes('invalid key')
+  );
 }
 
 function mapUserFromDb(row: any): User {
@@ -335,7 +447,11 @@ export const supabaseDb = {
     try {
       const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.error('Error fetching products from Supabase:', error);
+        if (isMissingTableError(error)) {
+          console.log('[Supabase Sync Info] products table query deferred (setup pending).');
+          return null;
+        }
+        console.log('[Supabase Sync Info] products query detail:', error);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('supabase-sync-error', {
             detail: { table: 'products', error }
@@ -345,7 +461,7 @@ export const supabaseDb = {
       }
       return data.map(mapProductFromDb);
     } catch (e: any) {
-      console.error('Failed to sync products with Supabase:', e);
+      console.log('[Supabase Sync Info] Failed to sync products with Supabase:', e);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('supabase-sync-error', {
           detail: { table: 'products', error: e }
@@ -361,7 +477,11 @@ export const supabaseDb = {
       const dbRow = mapProductToDb(product);
       const { error } = await resilientUpsert('products', dbRow);
       if (error) {
-        console.error('Error saving product to Supabase:', error);
+        if (isMissingTableError(error)) {
+          console.log('[Supabase Sync Info] save product query deferred (setup pending).');
+          return false;
+        }
+        console.log('[Supabase Sync Info] save product query detail:', error);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('supabase-sync-error', {
             detail: { table: 'products', error }
@@ -371,7 +491,7 @@ export const supabaseDb = {
       }
       return true;
     } catch (e: any) {
-      console.error('Failed to save product to Supabase:', e);
+      console.log('[Supabase Sync Info] Failed to save product to Supabase:', e);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('supabase-sync-error', {
           detail: { table: 'products', error: e }
@@ -386,7 +506,11 @@ export const supabaseDb = {
     try {
       const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) {
-        console.error('Error deleting product from Supabase:', error);
+        if (isMissingTableError(error)) {
+          console.log('[Supabase Sync Info] delete product query deferred (setup pending).');
+          return false;
+        }
+        console.log('[Supabase Sync Info] delete product query detail:', error);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('supabase-sync-error', {
             detail: { table: 'products', error }
@@ -396,7 +520,7 @@ export const supabaseDb = {
       }
       return true;
     } catch (e: any) {
-      console.error('Failed to delete product from Supabase:', e);
+      console.log('[Supabase Sync Info] Failed to delete product from Supabase:', e);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('supabase-sync-error', {
           detail: { table: 'products', error: e }
@@ -411,7 +535,11 @@ export const supabaseDb = {
     try {
       const { data, error } = await supabase.from('users').select('*');
       if (error) {
-        console.error('Error fetching users from Supabase:', error);
+        if (isMissingTableError(error)) {
+          console.log('[Supabase Sync Info] users table query deferred (setup pending).');
+          return null;
+        }
+        console.log('[Supabase Sync Info] users query detail:', error);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('supabase-sync-error', {
             detail: { table: 'users', error }
@@ -421,7 +549,7 @@ export const supabaseDb = {
       }
       return data.map(mapUserFromDb);
     } catch (e: any) {
-      console.error('Failed to sync users with Supabase:', e);
+      console.log('[Supabase Sync Info] Failed to sync users with Supabase:', e);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('supabase-sync-error', {
           detail: { table: 'users', error: e }
@@ -437,7 +565,11 @@ export const supabaseDb = {
       const dbRow = mapUserToDb(user);
       const { error } = await resilientUpsert('users', dbRow);
       if (error) {
-        console.error('Error saving user to Supabase:', error);
+        if (isMissingTableError(error)) {
+          console.log('[Supabase Sync Info] save user query deferred (setup pending).');
+          return false;
+        }
+        console.log('[Supabase Sync Info] save user query detail:', error);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('supabase-sync-error', {
             detail: { table: 'users', error }
@@ -447,7 +579,7 @@ export const supabaseDb = {
       }
       return true;
     } catch (e: any) {
-      console.error('Failed to save user to Supabase:', e);
+      console.log('[Supabase Sync Info] Failed to save user to Supabase:', e);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('supabase-sync-error', {
           detail: { table: 'users', error: e }
@@ -462,7 +594,11 @@ export const supabaseDb = {
     try {
       const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.error('Error fetching orders from Supabase:', error);
+        if (isMissingTableError(error)) {
+          console.log('[Supabase Sync Info] orders table query deferred (setup pending).');
+          return null;
+        }
+        console.log('[Supabase Sync Info] orders query detail:', error);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('supabase-sync-error', {
             detail: { table: 'orders', error }
@@ -472,7 +608,7 @@ export const supabaseDb = {
       }
       return data.map(mapOrderFromDb);
     } catch (e: any) {
-      console.error('Failed to sync orders with Supabase:', e);
+      console.log('[Supabase Sync Info] Failed to sync orders with Supabase:', e);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('supabase-sync-error', {
           detail: { table: 'orders', error: e }
@@ -488,7 +624,11 @@ export const supabaseDb = {
       const dbRow = mapOrderToDb(order);
       const { error } = await resilientUpsert('orders', dbRow);
       if (error) {
-        console.error('Error saving order to Supabase:', error);
+        if (isMissingTableError(error)) {
+          console.log('[Supabase Sync Info] save order query deferred (setup pending).');
+          return false;
+        }
+        console.log('[Supabase Sync Info] save order query detail:', error);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('supabase-sync-error', {
             detail: { table: 'orders', error }
@@ -498,12 +638,146 @@ export const supabaseDb = {
       }
       return true;
     } catch (e: any) {
-      console.error('Failed to save order to Supabase:', e);
+      console.log('[Supabase Sync Info] Failed to save order to Supabase:', e);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('supabase-sync-error', {
           detail: { table: 'orders', error: e }
         }));
       }
+      return false;
+    }
+  },
+
+  async getWallets(): Promise<any[] | null> {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase.from('wallets').select('*');
+      if (error) {
+        if (isMissingTableError(error)) {
+          return null;
+        }
+        console.log('[Supabase Sync Info] wallets table query deferred (setup pending).');
+        return null;
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async saveWallet(wallet: any): Promise<boolean> {
+    if (!supabase) return false;
+    try {
+      const { error } = await supabase.from('wallets').upsert({
+        user_email: wallet.userEmail.toLowerCase().trim(),
+        balance: wallet.balance,
+        updated_at: new Date().toISOString()
+      });
+      if (error) {
+        if (isMissingTableError(error)) return false;
+        console.log('[Supabase Sync Info] Error saving wallet to Supabase:', error);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  async getWalletTransactions(): Promise<any[] | null> {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase.from('wallet_transactions').select('*');
+      if (error) {
+        if (isMissingTableError(error)) {
+          return null;
+        }
+        console.log('[Supabase Sync Info] wallet_transactions table query deferred (setup pending).');
+        return null;
+      }
+      return data.map(row => ({
+        id: row.id,
+        userEmail: row.user_email,
+        amount: Number(row.amount),
+        type: row.type,
+        description: row.description,
+        timestamp: row.timestamp,
+        paystackReference: row.paystack_reference
+      }));
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async saveWalletTransaction(tx: any): Promise<boolean> {
+    if (!supabase) return false;
+    try {
+      const { error } = await supabase.from('wallet_transactions').upsert({
+        id: tx.id,
+        user_email: tx.userEmail,
+        amount: tx.amount,
+        type: tx.type,
+        description: tx.description,
+        timestamp: tx.timestamp,
+        paystack_reference: tx.paystackReference
+      });
+      if (error) {
+        if (isMissingTableError(error)) return false;
+        console.log('[Supabase Sync Info] Error saving transaction to Supabase:', error);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  async getPurchases(): Promise<any[] | null> {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase.from('purchases').select('*');
+      if (error) {
+        if (isMissingTableError(error)) {
+          return null;
+        }
+        console.log('[Supabase Sync Info] purchases table query deferred (setup pending).');
+        return null;
+      }
+      return data.map(row => ({
+        id: row.id,
+        userEmail: row.user_email,
+        productId: row.product_id,
+        productTitle: row.product_title,
+        amountPaid: Number(row.amount_paid),
+        transactionReference: row.transaction_reference,
+        credentialsShared: row.credentials_shared,
+        purchasedAt: row.purchased_at
+      }));
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async savePurchase(purchase: any): Promise<boolean> {
+    if (!supabase) return false;
+    try {
+      const { error } = await supabase.from('purchases').upsert({
+        id: purchase.id,
+        user_email: purchase.userEmail,
+        product_id: purchase.productId,
+        product_title: purchase.productTitle,
+        amount_paid: purchase.amountPaid,
+        transaction_reference: purchase.transactionReference,
+        credentials_shared: purchase.credentialsShared,
+        purchased_at: purchase.purchasedAt
+      });
+      if (error) {
+        if (isMissingTableError(error)) return false;
+        console.log('[Supabase Sync Info] Error saving purchase to Supabase:', error);
+        return false;
+      }
+      return true;
+    } catch (e) {
       return false;
     }
   }

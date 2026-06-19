@@ -361,7 +361,7 @@ app.post('/api/admin/create', authenticateToken, (req: Request, res: Response) =
 // ============================================
 
 // A. Get wallet details and transaction history
-app.get('/api/wallet', (req: Request, res: Response) => {
+app.get('/api/wallet', async (req: Request, res: Response) => {
   const email = req.query.email as string;
   console.log(`[Wallet API GET] Retrieve request received for user key: "${email}" (IP: ${req.ip})`);
   try {
@@ -370,6 +370,7 @@ app.get('/api/wallet', (req: Request, res: Response) => {
       res.status(400).json({ status: 'error', message: 'User email is required' });
       return;
     }
+    await walletDb.syncFromSupabase();
     const wallet = walletDb.getOrCreateWallet(email);
     const transactions = walletDb.getTransactionsForUser(email);
     console.log(`[Wallet API GET] Successfully synchronized. User: ${email}, Balance: ₦${wallet.balance}, Transactions: ${transactions.length}`);
@@ -381,7 +382,7 @@ app.get('/api/wallet', (req: Request, res: Response) => {
 });
 
 // B. Purchase product using wallet balance
-app.post('/api/wallet/purchase', (req: Request, res: Response) => {
+app.post('/api/wallet/purchase', async (req: Request, res: Response) => {
   const { email, productId, productPrice, productTitle } = req.body;
   console.log(`[Wallet API Purchase] Debit request received. User: "${email}", ProductId: "${productId}", Price: ₦${productPrice}, Title: "${productTitle}"`);
   try {
@@ -391,9 +392,11 @@ app.post('/api/wallet/purchase', (req: Request, res: Response) => {
       return;
     }
     
+    await walletDb.syncFromSupabase();
     // Secure debit and purchase operation on backend to prevent dupes & race conditions
     const result = walletDb.purchaseProductFromWallet(email, productId, Number(productPrice), productTitle);
     if (result.success) {
+      await walletDb.syncToSupabase();
       console.log(`[Wallet API Purchase] SUCCESS: Deducted ₦${Number(productPrice)} from user "${email}". New balance: ₦${result.balance}`);
       res.json(result);
     } else {
@@ -407,7 +410,7 @@ app.post('/api/wallet/purchase', (req: Request, res: Response) => {
 });
 
 // D. Get all purchases for a user
-app.get('/api/purchases', (req: Request, res: Response) => {
+app.get('/api/purchases', async (req: Request, res: Response) => {
   const email = req.query.email as string;
   console.log(`[Purchases API GET] Fetching purchases folder list for user: "${email}"`);
   try {
@@ -416,6 +419,7 @@ app.get('/api/purchases', (req: Request, res: Response) => {
       res.status(400).json({ status: 'error', message: 'Missing email query parameter' });
       return;
     }
+    await walletDb.syncFromSupabase();
     const userPurchases = purchasesDb.getPurchasesForUser(email);
     console.log(`[Purchases API GET] Match complete. User: "${email}" has ${userPurchases.length} total purchase records.`);
     res.json(userPurchases);
@@ -426,7 +430,7 @@ app.get('/api/purchases', (req: Request, res: Response) => {
 });
 
 // E. Add a new purchase record
-app.post('/api/purchases', (req: Request, res: Response) => {
+app.post('/api/purchases', async (req: Request, res: Response) => {
   const { id, userEmail, productId, productTitle, amountPaid, transactionReference, credentialsShared } = req.body;
   console.log(`[Purchases API POST] Writing purchase record. OrderId: "${id}", User: "${userEmail}", Product: "${productTitle}", Price: ₦${amountPaid}`);
   try {
@@ -435,6 +439,7 @@ app.post('/api/purchases', (req: Request, res: Response) => {
       res.status(400).json({ status: 'error', message: 'Missing purchase details' });
       return;
     }
+    await walletDb.syncFromSupabase();
     const newPurchase = {
       id: id || `purch-${Date.now()}`,
       userEmail: userEmail.toLowerCase().trim(),
@@ -446,6 +451,7 @@ app.post('/api/purchases', (req: Request, res: Response) => {
       purchasedAt: new Date().toISOString()
     };
     purchasesDb.addPurchase(newPurchase);
+    await walletDb.syncToSupabase();
     console.log(`[Purchases API POST] SUCCESS: Purchase record successfully registered on server disk. OrderId: "${newPurchase.id}"`);
     res.json({ success: true, purchase: newPurchase });
   } catch (error: any) {
@@ -463,12 +469,14 @@ app.post('/api/wallet/verify-funding', async (req: Request, res: Response) => {
   }
 
   try {
+    await walletDb.syncFromSupabase();
     const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
     if (!secretKey) {
       console.warn('[Wallet Verify] PAYSTACK_SECRET_KEY is undefined on server, executing fallback verification');
       // Simulated wallet credit for developer mode / sandbox testing
       const amount = req.body.amount ? Number(req.body.amount) : 10000;
       const creditRes = walletDb.creditWallet(email, amount, reference);
+      await walletDb.syncToSupabase();
       res.json(creditRes);
       return;
     }
@@ -499,6 +507,7 @@ app.post('/api/wallet/verify-funding', async (req: Request, res: Response) => {
       if (isTestKey || process.env.NODE_ENV !== 'production') {
         const amount = req.body.amount ? Number(req.body.amount) : 10000;
         const creditRes = walletDb.creditWallet(email, amount, reference);
+        await walletDb.syncToSupabase();
         res.json(creditRes);
         return;
       }
@@ -514,6 +523,7 @@ app.post('/api/wallet/verify-funding', async (req: Request, res: Response) => {
     if (gatewayTrx.status === 'success') {
       const amtNaira = gatewayTrx.amount / 100;
       const creditRes = walletDb.creditWallet(email, amtNaira, reference);
+      await walletDb.syncToSupabase();
       res.json(creditRes);
     } else {
       res.status(400).json({ status: 'error', message: 'Transaction status was not successful on Paystack' });
@@ -542,6 +552,7 @@ app.get('/api/paystack/callback', async (req: Request, res: Response) => {
   }
 
   try {
+    await walletDb.syncFromSupabase();
     const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
     if (!secretKey) {
       console.error('[Callback Requests] Paystack Secret Key is missing in environment.');
@@ -599,6 +610,7 @@ app.get('/api/paystack/callback', async (req: Request, res: Response) => {
         const fundingEmail = verifyData.data?.customer?.email || 'unknown@example.com';
         const amtNaira = verifyData.data?.amount ? (verifyData.data.amount / 100) : 10000;
         walletDb.creditWallet(fundingEmail, amtNaira, reference);
+        await walletDb.syncToSupabase();
       }
 
       // Redirect client cleanly back to the root view with successful callback status
@@ -735,6 +747,7 @@ app.post('/api/paystack/initialize-payment', async (req: Request, res: Response)
 // POST to verify payment securely on server
 app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
   try {
+    await walletDb.syncFromSupabase();
     const payload = req.body;
     console.log('[API Webhook] Paystack hook payload received. Event:', payload?.event || req.body?.data?.status);
 
@@ -792,6 +805,7 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
         let walletRes = null;
         if (txRef.startsWith('wallet_') || txRef.startsWith('fnd-') || txRef.startsWith('fnd_')) {
           walletRes = walletDb.creditWallet(fundingEmail, amtNaira, txRef);
+          await walletDb.syncToSupabase();
         }
 
         res.json({
@@ -830,6 +844,7 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
       if (txRef.startsWith('wallet_') || txRef.startsWith('fnd-') || txRef.startsWith('fnd_')) {
         const fundingEmail = gatewayTrx.customer?.email || 'unknown@example.com';
         walletRes = walletDb.creditWallet(fundingEmail, amtNaira, txRef);
+        await walletDb.syncToSupabase();
       }
 
       res.json({

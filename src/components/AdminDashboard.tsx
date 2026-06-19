@@ -9,7 +9,7 @@ import {
 import { ProductListing, User, Order, CredentialEntry, Merchant, TrashItem } from '../types';
 import { db, formatNaira } from '../data';
 import { encryptCredentials, decryptCredentials } from '../utils/crypto';
-import { supabase, supabaseUrl, isConfigured, stringToUuid } from '../supabaseClient';
+import { supabase, supabaseUrl, isConfigured, stringToUuid, SUPABASE_SQL_SETUP } from '../supabaseClient';
 
 interface AdminDashboardProps {
   currentUser: User | null;
@@ -2268,6 +2268,42 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_gateway TEXT DEFAULT 
               <p className="text-[10px] text-slate-500 leading-relaxed italic">
                 💡 <b>How to run:</b> Go to your <b>Supabase Dashboard</b> → <b>SQL Editor</b> → create a <b>New Query</b> → paste this script and click <b>Run</b>. Your product saves will work immediately after running!
               </p>
+            </div>
+          </div>
+
+          {/* Complete 1-Click Database Setup Script Section */}
+          <div className="bg-emerald-50 border border-emerald-250 p-5 rounded-xl space-y-4">
+            <div className="flex items-start gap-2.5 text-emerald-850 font-bold text-xs select-none">
+              <Database className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
+              <div className="space-y-0.5">
+                <span className="block text-sm font-semibold text-emerald-950">1-Click Full Database Schema Setup (Required for Vercel/Production)</span>
+                <span className="text-[10px] text-emerald-600 font-medium font-mono">Sets up Users, Products, Orders, Wallets, Transactions, and Purchases Tables</span>
+              </div>
+            </div>
+            
+            <p className="text-xs text-emerald-700 leading-relaxed">
+              If you got database missing table errors after deploying to Vercel, this is simply because you haven't run the table definitions inside your new remote Supabase workspace. Copy this full script, go to your <b>Supabase SQL Editor</b>, paste it, and run it to create all tables and unlock them instantly!
+            </p>
+
+            <div className="bg-white border border-emerald-250/60 p-4 rounded-lg space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="space-y-1">
+                  <span className="text-xs font-bold text-slate-800 block">Complete Setup Schema Script</span>
+                  <span className="text-[10px] text-slate-400 block">Creates all 6 essential tables and disables Row-Level Security automatically.</span>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(SUPABASE_SQL_SETUP);
+                    alert('Full Database Schema SQL successfully copied! Paste and run it in your Supabase SQL Editor.');
+                  }}
+                  className="bg-emerald-100 hover:bg-emerald-200 text-emerald-950 text-[10px] px-3.5 py-1.5 rounded-lg transition select-none cursor-pointer font-extrabold shadow-sm"
+                >
+                  Copy Full SQL Script
+                </button>
+              </div>
+              <pre className="text-[11px] font-mono text-slate-500 bg-slate-50 p-3 rounded-md overflow-x-auto border max-h-48 whitespace-pre leading-tight">
+{SUPABASE_SQL_SETUP}
+              </pre>
             </div>
           </div>
         </div>
