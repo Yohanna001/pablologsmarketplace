@@ -4,7 +4,6 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
-import { createServer as createViteServer } from 'vite';
 import { adminDb } from './src/server/adminDb';
 import { walletDb, purchasesDb } from './src/server/walletDb';
 
@@ -60,9 +59,6 @@ function authenticateToken(req: Request, res: Response, next: NextFunction): voi
     next();
   });
 }
-
-// Ensure first run init happens
-adminDb.getAdmins();
 
 // --- API ENDPOINTS ---
 
@@ -915,8 +911,13 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
 // --- DEPLOYMENT / SERVER INTEGRATION FLOW ---
 
 async function startServer() {
-  // If running on Vercel Serverless environment, skip starting the local Express server listening on PORT
-  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL;
+  // Safe environment-based check to identify Vercel Serverless Function, Edge, AWS Lambda, or other container/serverless structures
+  const isVercel = process.env.VERCEL === '1' || 
+                   !!process.env.VERCEL || 
+                   !!process.env.NOW_REGION || 
+                   !!process.env.AWS_LAMBDA_FUNCTION_NAME ||
+                   process.env.NODE_ENV === 'production' && !process.env.PORT;
+
   if (isVercel) {
     console.log('[Server] Vercel Serverless Environment detected. Skipping listener binding and Vite static middleware.');
     // Return structured JSON for unmatched API routes in the serverless functions rather than falling through to HTML index which crashes
@@ -926,17 +927,30 @@ async function startServer() {
     return;
   }
 
+  // Warm up databases on normal server startup (outside Vercel)
+  try {
+    adminDb.getAdmins();
+  } catch (dbErr) {
+    console.warn('[Server Startup] Failed to seed administrative databases locally:', dbErr);
+  }
+
   // Vite integration for dev vs prod static assets
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { 
-        middlewareMode: true,
-        hmr: false
-      },
-      appType: 'spa',
-    });
-    // Use Vite's connect instance as middleware (handles React client routes seamlessly)
-    app.use(vite.middlewares);
+    try {
+      console.log('[Server Startup] Lazily loading Vite development server middleware...');
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { 
+          middlewareMode: true,
+          hmr: false
+        },
+        appType: 'spa',
+      });
+      // Use Vite's connect instance as middleware (handles React client routes seamlessly)
+      app.use(vite.middlewares);
+    } catch (viteErr) {
+      console.error('[Server Startup] Failed to initialize development Vite server:', viteErr);
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     // Serve static frontend assets

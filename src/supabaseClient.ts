@@ -1,21 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 import { ProductListing, User, Order } from './types';
 
-let rawSupabaseUrl = (
-  (typeof process !== 'undefined' && (process.env?.SUPABASE_URL || process.env?.VITE_SUPABASE_URL)) ||
-  ((import.meta as any).env?.VITE_SUPABASE_URL) || 
-  ''
-).trim();
+let rawSupabaseUrl = '';
+if (typeof process !== 'undefined' && process.env) {
+  rawSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+}
+if (!rawSupabaseUrl && typeof import.meta !== 'undefined' && (import.meta as any).env) {
+  rawSupabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || '';
+}
+rawSupabaseUrl = (rawSupabaseUrl || '').trim();
 
-const supabaseAnonKey = (
-  (typeof process !== 'undefined' && (
-    process.env?.SUPABASE_SERVICE_ROLE_KEY || 
-    process.env?.SUPABASE_ANON_KEY || 
-    process.env?.VITE_SUPABASE_ANON_KEY
-  )) ||
-  ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || 
-  ''
-).trim();
+let rawSupabaseKey = '';
+if (typeof process !== 'undefined' && process.env) {
+  rawSupabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
+                   process.env.SUPABASE_ANON_KEY || 
+                   process.env.VITE_SUPABASE_ANON_KEY || '';
+}
+if (!rawSupabaseKey && typeof import.meta !== 'undefined' && (import.meta as any).env) {
+  rawSupabaseKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || '';
+}
+const supabaseAnonKey = (rawSupabaseKey || '').trim();
 
 // Sanitize common copy-paste formatting errors
 if (rawSupabaseUrl) {
