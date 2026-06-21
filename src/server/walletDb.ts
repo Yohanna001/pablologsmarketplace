@@ -206,6 +206,16 @@ export const walletDb = {
     txs.unshift(newTx);
     this.saveTransactions(txs);
 
+    // Fast direct upsert to Supabase to prevent execution timeouts on Vercel
+    if (isConfigured) {
+      Promise.all([
+        supabaseDb.saveWallet(wallet),
+        supabaseDb.saveWalletTransaction(newTx)
+      ]).catch(err => {
+        console.error('[Wallet DB] Fast-track direct Supabase save failed:', err);
+      });
+    }
+
     console.log(`[Wallet DB] Securing Account Credit: user ${cleanEmail} credited with NGN ${amount}. Balance is now ${wallet.balance}.`);
     return { success: true, message: `Successfully loaded ₦${amount.toLocaleString()} into your wallet!`, balance: wallet.balance };
   },
@@ -237,6 +247,16 @@ export const walletDb = {
     };
     txs.unshift(newTx);
     this.saveTransactions(txs);
+
+    // Fast direct upsert to Supabase to prevent execution timeouts on Vercel
+    if (isConfigured) {
+      Promise.all([
+        supabaseDb.saveWallet(wallet),
+        supabaseDb.saveWalletTransaction(newTx)
+      ]).catch(err => {
+        console.error('[Wallet DB] Fast-track direct Supabase save failed for purchase:', err);
+      });
+    }
 
     console.log(`[Wallet DB] Securing Account Debit: user ${cleanEmail} purchased ${productTitle} for NGN ${productPrice}. Remaining balance: ${wallet.balance}.`);
     return { 
@@ -368,6 +388,13 @@ export const purchasesDb = {
     if (!exists) {
       list.unshift(purchase);
       this.savePurchases(list);
+
+      // Fast direct upsert to Supabase to prevent execution timeouts on Vercel
+      if (isConfigured) {
+        supabaseDb.savePurchase(purchase).catch(err => {
+          console.error('[Purchases DB] Fast-track direct Supabase save failed for purchase:', err);
+        });
+      }
     }
   },
 

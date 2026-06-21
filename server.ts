@@ -907,6 +907,10 @@ async function startServer() {
   const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL;
   if (isVercel) {
     console.log('[Server] Vercel Serverless Environment detected. Skipping listener binding and Vite static middleware.');
+    // Return structured JSON for unmatched API routes in the serverless functions rather than falling through to HTML index which crashes
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      res.status(404).json({ status: 'error', message: `Route not found: ${req.method} ${req.url}` });
+    });
     return;
   }
 
