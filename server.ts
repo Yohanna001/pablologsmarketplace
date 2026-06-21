@@ -28,6 +28,16 @@ app.use(express.json({
   }
 }));
 
+// Prevent caching on API endpoints (vital for Vercel/CDN and Serverless deployment updates)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path.startsWith('/api')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
 // Load basic secrets with defaults
 const JWT_SECRET = process.env.JWT_SECRET || 'purelogs_super_secret_jwt_key_2026_rfv_987';
 

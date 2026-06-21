@@ -165,11 +165,16 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
         console.warn('[Wallet] Could not fetch server paystack config:', e);
       }
 
+      // Clean the key from any wrapping quotes or whitespaces immediately
+      if (publicKey) {
+        publicKey = publicKey.trim().replace(/^["']|["']$/g, '').trim();
+      }
+
       // 2. Fallback to Vite client environment variables if server didn't provide a valid pk_ key
       if (!publicKey || !publicKey.startsWith('pk_')) {
         const vitePk = (import.meta as any).env.VITE_PAYSTACK_PUBLIC_KEY;
-        if (vitePk && vitePk.startsWith('pk_')) {
-          publicKey = vitePk;
+        if (vitePk) {
+          publicKey = vitePk.trim().replace(/^["']|["']$/g, '').trim();
         }
       }
       
