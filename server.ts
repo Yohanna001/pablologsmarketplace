@@ -475,7 +475,7 @@ app.post(['/api/wallet/verify-funding', '/api/verify-funding', '/api/paystack/ve
 
   try {
     await walletDb.syncFromSupabase();
-    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
+    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY || process.env.VITE_PAYSTACK_SECRET_KEY);
     if (!secretKey) {
       console.warn('[Wallet Verify] PAYSTACK_SECRET_KEY is undefined on server, executing fallback verification');
       // Simulated wallet credit for developer mode / sandbox testing
@@ -558,7 +558,7 @@ app.get('/api/paystack/callback', async (req: Request, res: Response) => {
 
   try {
     await walletDb.syncFromSupabase();
-    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
+    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY || process.env.VITE_PAYSTACK_SECRET_KEY);
     if (!secretKey) {
       console.error('[Callback Requests] Paystack Secret Key is missing in environment.');
       res.redirect(`/?view=payment-callback&status=failed&tx_ref=${reference}`);
@@ -645,8 +645,10 @@ app.get('/payment/callback', (req: Request, res: Response) => {
 
 // GET configuration for public key
 app.get('/api/paystack/config', (req: Request, res: Response) => {
+  const pk = cleanValue(process.env.PAYSTACK_PUBLIC_KEY || process.env.VITE_PAYSTACK_PUBLIC_KEY);
+  console.log('[Paystack config API] Loading public key:', pk ? (pk.startsWith('pk_live_') ? 'LIVE / PRODUCTION KEY' : 'TEST / SANDBOX KEY') : 'NONE (EXPLICITLY BLANK)');
   res.json({
-    publicKey: cleanValue(process.env.PAYSTACK_PUBLIC_KEY)
+    publicKey: pk
   });
 });
 
@@ -676,8 +678,8 @@ app.post('/api/paystack/initialize-payment', async (req: Request, res: Response)
       return;
     }
 
-    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
-    const publicKey = cleanValue(process.env.PAYSTACK_PUBLIC_KEY);
+    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY || process.env.VITE_PAYSTACK_SECRET_KEY);
+    const publicKey = cleanValue(process.env.PAYSTACK_PUBLIC_KEY || process.env.VITE_PAYSTACK_PUBLIC_KEY);
 
     if (!secretKey) {
       console.error('[Transaction Reference] Error: PAYSTACK_SECRET_KEY is undefined on server.');
@@ -756,7 +758,7 @@ app.post('/api/paystack/webhook', async (req: Request, res: Response) => {
     
     // 2. Verify Paystack signature if signature header is present
     const signature = req.headers['x-paystack-signature'] as string;
-    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY);
+    const secretKey = cleanValue(process.env.PAYSTACK_SECRET_KEY || process.env.VITE_PAYSTACK_SECRET_KEY);
 
     if (signature) {
       if (!secretKey) {

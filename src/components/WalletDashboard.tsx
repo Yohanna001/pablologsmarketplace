@@ -176,7 +176,8 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
       // Ensure script has fully loaded
       const isScriptLoaded = await loadPaystackScript();
       const paystackPopObj = (window as any).PaystackPop;
-      const hasRealKey = publicKey && publicKey.trim() !== '' && !publicKey.includes('...') && publicKey.startsWith('pk_');
+      const cleanKey = publicKey ? publicKey.trim().replace(/^["']|["']$/g, '').trim() : '';
+      const hasRealKey = cleanKey && cleanKey !== '' && !cleanKey.includes('...') && cleanKey.startsWith('pk_');
 
       if (isScriptLoaded && paystackPopObj && hasRealKey) {
         // Option A: Real Paystack Inline Pop Setup
@@ -211,7 +212,7 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
           if (typeof paystackPopObj.setup === 'function') {
             // Legacy/V1 mode
             const handler = paystackPopObj.setup({
-              key: publicKey,
+              key: cleanKey,
               email: currentUser?.email.toLowerCase(),
               amount: Math.round(amountNum * 100),
               ref: tx_ref,
@@ -231,7 +232,7 @@ export default function WalletDashboard({ currentUser, triggerAlert, onRefreshOr
             // Standard V2 mode
             const paystackInstance = new paystackPopObj();
             paystackInstance.newTransaction({
-              key: publicKey,
+              key: cleanKey,
               email: currentUser?.email.toLowerCase(),
               amount: Math.round(amountNum * 100),
               ref: tx_ref,
