@@ -1,15 +1,12 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { adminDb } from './src/server/adminDb';
 import { walletDb, purchasesDb } from './src/server/walletDb';
 
-
-// Load environment variables
-dotenv.config();
 
 // Sanitizer to clean environment variables (removing enclosing quotes, trailing characters, or whitespaces)
 const cleanValue = (val: string | undefined): string => {
@@ -699,7 +696,10 @@ app.post('/api/paystack/initialize-payment', async (req: Request, res: Response)
     const host = req.headers.host || 'localhost:3000';
     const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.secure || req.headers['x-forwarded-ssl'] === 'on';
     const protocol = isHttps ? 'https' : 'http';
-    const domain = `${protocol}://${host}`;
+    const envAppUrl = process.env.APP_URL ? process.env.APP_URL.trim() : '';
+    const domain = (envAppUrl && envAppUrl !== 'MY_APP_URL')
+      ? envAppUrl.replace(/\/$/, '')
+      : `${protocol}://${host}`;
     
     // Redirect callback runs entirely within Express server /api namespace
     const redirectUrl = `${domain}/api/paystack/callback`;
